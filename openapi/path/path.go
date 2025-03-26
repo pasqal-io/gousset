@@ -8,7 +8,6 @@ import (
 	"github.com/pasqal-io/gousset/openapi/doc"
 	"github.com/pasqal-io/gousset/openapi/operation"
 	"github.com/pasqal-io/gousset/openapi/parameter"
-	"github.com/pasqal-io/gousset/openapi/security"
 )
 
 // A path in the API.
