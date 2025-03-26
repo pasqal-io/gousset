@@ -25,8 +25,8 @@ type None struct{}
 func (None) sealed() {}
 
 type Shared struct {
-	ExternalDocs *doc.External `json:"externalDocs"`
-	Example      *shared.Json  `json:"example"`
+	ExternalDocs *doc.External `json:"externalDocs,omitempty"`
+	Example      *shared.Json  `json:"example,omitempty"`
 	Type         Type          `json:"type"`
 }
 
@@ -43,7 +43,7 @@ const (
 type Primitive struct {
 	Shared
 	// A well-known format, e.g. "email".
-	Format *string `json:"schema"`
+	Format *string `json:"format,omitempty"`
 }
 
 func (Primitive) sealed() {}
@@ -51,7 +51,7 @@ func (Primitive) sealed() {}
 type Object struct {
 	Shared
 	// Required fields.
-	Required   *[]string         `json:"required"`
+	Required   *[]string         `json:"required,omitempty"`
 	Properties map[string]Schema `json:"properties"`
 }
 
@@ -60,7 +60,7 @@ func (Object) sealed() {}
 type Array struct {
 	Shared
 	Items Schema             `json:"items"`
-	Defs  *map[string]Schema `json:"$defs"`
+	Defs  *map[string]Schema `json:"$defs,omitempty"`
 }
 
 func (Array) sealed() {}
@@ -85,6 +85,13 @@ type Discriminator struct {
 	Mapping *map[string]string `json:"mapping"`
 }
 
+// Create a schema from a type.
+//
+// As of this writing, we make no attempt to optimize schemas if e.g. some data structures are repeated.
+//
+// Arguments:
+//
+//	typ The type to extract. See HasSchema, HasExternalDocs, HasExample for means to configure it.
 func FromType(typ reflect.Type, publicNameKey string) (Schema, error) {
 	var externalDocs *doc.External
 	var anExample *shared.Json
@@ -208,6 +215,6 @@ func FromType(typ reflect.Type, publicNameKey string) (Schema, error) {
 			Properties: properties,
 		}, nil
 	default:
-		return None{}, fmt.Errorf("couldn't find any scheme for type %s", typ.String())
+		return None{}, fmt.Errorf("couldn't find any scheme for type %s, you may need to implement HasSchema", typ.String())
 	}
 }

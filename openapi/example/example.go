@@ -22,10 +22,12 @@ type Reference struct {
 	Description string `json:"description"`
 }
 
+// A field/struct/... that has a single example without further comments.
 type HasExample interface {
 	Example() shared.Json
 }
 
+// A field/struct/... that has detailed examples.
 type HasExamples interface {
 	Examples() Example
 }

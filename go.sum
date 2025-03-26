@@ -1,2 +1,10 @@
+github.com/google/go-cmp v0.5.9 h1:O2Tfq5qg4qc4AmwVlvv0oLiVAGB7enBSJ2x2DqQFi38=
+github.com/google/go-cmp v0.5.9/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
+github.com/kinbiko/jsonassert v1.2.0 h1:+/JthIVXdIrThrOtSN9ry0mNtWKXMWuvxR0nU7gQ+tI=
+github.com/kinbiko/jsonassert v1.2.0/go.mod h1:pCc3uudOt+lVAbkji9O0uw8MSVt4s+1ZJ0y8Ux2F1Og=
 github.com/pasqal-io/godasse v0.5.2 h1:JSUr5SlB8Dt/nGRN1nSUfvoWXj6qR6d+qcWDCkkhEvA=
 github.com/pasqal-io/godasse v0.5.2/go.mod h1:I5hGiWnXyfE2MMIQtmIF0e3EOABQdDyLKm3Cvd0fxAo=
+github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
+github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
+gotest.tools v2.2.0+incompatible h1:VsBPFP1AI068pPrMxtb/S8Zkgf9xEmTLJjfM+P5UIEo=
+gotest.tools v2.2.0+incompatible/go.mod h1:DsYFclhRJ6vuDpmuTbkuFWG+y2sxOXAzmJt81HFBacw=
