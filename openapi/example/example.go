@@ -1,6 +1,10 @@
 package example
 
-import "github.com/pasqal-io/gousset/openapi/shared"
+import (
+	"reflect"
+
+	"github.com/pasqal-io/gousset/openapi/shared"
+)
 
 type Example interface {
 	sealed()
@@ -29,5 +33,29 @@ type HasExample interface {
 
 // A field/struct/... that has detailed examples.
 type HasExamples interface {
-	Examples() Example
+	Examples() map[string]Example
+}
+
+// Utility cast to HasExample, get the example.
+func GetExample(typ reflect.Type) *shared.Json {
+	phony := reflect.New(typ)
+	if !phony.CanInterface() {
+		return nil
+	}
+	if casted, ok := phony.Interface().(HasExample); ok {
+		return shared.Ptr(casted.Example())
+	}
+	return nil
+}
+
+// Utility cast to HasExamples, get the examples.
+func GetExamples(typ reflect.Type) *map[string]Example {
+	phony := reflect.New(typ)
+	if !phony.CanInterface() {
+		return nil
+	}
+	if casted, ok := phony.Interface().(HasExamples); ok {
+		return shared.Ptr(casted.Examples())
+	}
+	return nil
 }
