@@ -63,14 +63,8 @@ var _ doc.HasSummary = SimpleStructWithStructSummaryAndPublicName{}
 
 func TestOperationWithStructSummaryAndPublicName(t *testing.T) {
 	sample := SimpleStructWithStructSummaryAndPublicName{}
-	spec, err := operation.FromStruct(reflect.TypeOf(sample), []security.Requirement{}, parameter.InPath, "GET", "/foo/bar")
+	_, err := operation.FromStruct(reflect.TypeOf(sample), []security.Requirement{}, parameter.InPath, "GET", "/foo/bar")
 	assert.ErrorContains(t, err, "doesn't have a summary")
-
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	testutils.EqualJSON(t, spec, ``)
 }
 
 // Operations should fail if there is no field summary.
