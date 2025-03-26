@@ -67,7 +67,7 @@ func TestOperationWithStructSummaryAndPublicName(t *testing.T) {
 	assert.ErrorContains(t, err, "doesn't have a summary")
 }
 
-// Operations should fail if there is no field summary.
+// Operations should succeed if we have everything!
 
 type SimpleStructWithSummaryAndPublicName struct {
 	Bool   bool    `path:"bool" summary:"this is a bool"`
