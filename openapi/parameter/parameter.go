@@ -41,12 +41,12 @@ type Spec struct {
 	// Structure and syntax of the parameter.
 	//
 	// Mutually exclusive with Schema.
-	*ContentSpec `json:"content"`
+	*ContentSpec `json:"content,omitempty"`
 
 	// Media type and schema for the parameter.
 	//
 	// Mutually exclusive with Content.
-	*SchemaSpec `json:"schema"`
+	*SchemaSpec `json:"schema,omitempty"`
 }
 
 func FromField(from reflect.StructField, in In) (Spec, error) {
@@ -132,15 +132,15 @@ var _ Parameter = Reference{}
 
 type SchemaSpec struct {
 	// Describes how the parameter value will be serialized depending on the type of the parameter value. Default values (based on value of in): for "query" - "form"; for "path" - "simple"; for "header" - "simple"; for "cookie" - "form".
-	Style *string `json:"style"`
+	Style *string `json:"style,omitempty"`
 
 	// When this is true, parameter values of type array or object generate separate parameters for each value of the array or key-value pair of the map. For other types of parameters this field has no effect. When style is "form", the default value is true. For all other styles, the default value is false. Note that despite false being the default for deepObject, the combination of false with deepObject is undefined.
-	Explode *bool `json:"explode"`
+	Explode *bool `json:"explode,omitempty"`
 
 	Schema schema.Schema `json:"schema"`
 
-	Example  *shared.Json       `json:"example"`
-	Examples *[]example.Example `json:"examples"`
+	Example  *shared.Json       `json:"example,omitempty"`
+	Examples *[]example.Example `json:"examples,omitempty"`
 }
 
 type ContentSpec struct {
