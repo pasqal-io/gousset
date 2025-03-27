@@ -89,7 +89,6 @@ func TestOperationWithSummaryAndPublicName(t *testing.T) {
 
 	testutils.EqualJSON(t, spec, `[{
 			"deprecated": false,
-			"description": null,
 			"in": "path",
 			"name": "bool",
 			"required": true,
@@ -101,7 +100,6 @@ func TestOperationWithSummaryAndPublicName(t *testing.T) {
 			"summary": "this is a bool"
         }, {
 			"deprecated": false,
-			"description": null,
 			"in": "path",
 			"name": "int",
 			"required": true,
@@ -113,7 +111,6 @@ func TestOperationWithSummaryAndPublicName(t *testing.T) {
 			"summary": "this is a int"
         }, {
 			"deprecated": false,
-			"description": null,
 			"in": "path",
 			"name": "float",
 			"required": true,
@@ -125,7 +122,6 @@ func TestOperationWithSummaryAndPublicName(t *testing.T) {
 			"summary": "this is a float"
         }, {
 			"deprecated": false,
-			"description": null,
 			"in": "path",
 			"name": "string",
 			"required": true,
