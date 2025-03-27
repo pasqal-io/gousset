@@ -57,7 +57,7 @@ type Implementation struct {
 }
 
 // Extract an OpenAPI spec for an operation from a description of the implementation.
-func FromInput(impl Implementation) (Spec, error) {
+func FromImplementation(impl Implementation) (Spec, error) {
 	operationId := fmt.Sprint(impl.Verb, " ", impl.Path)
 
 	result := Spec{
