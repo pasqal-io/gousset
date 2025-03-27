@@ -81,7 +81,7 @@ func FromPath(impl Implementation) (Spec, error) {
 		Parameters: nil,
 	}
 	for verb, verbImpl := range impl.PerVerb {
-		op, err := operation.FromInput(operation.Implementation{
+		op, err := operation.FromImplementation(operation.Implementation{
 			Input:        verbImpl.Input,
 			Verb:         string(verb),
 			Path:         impl.Path,
