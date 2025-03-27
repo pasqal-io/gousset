@@ -32,7 +32,7 @@ type Spec struct {
 	Summary string `json:"summary"`
 
 	// Longer description. May include Markdown.
-	Description *string `json:"description"`
+	Description *string `json:"description,omitempty"`
 
 	Required bool `json:"required"`
 
@@ -103,6 +103,25 @@ func FromField(from reflect.StructField, in In) (Spec, error) {
 		Required:    required,
 		SchemaSpec:  &schemaSpec,
 	}, nil
+}
+
+func FromStruct(Struct reflect.Type, in In) ([]Parameter, error) {
+	if Struct.Kind() != reflect.Struct {
+		return []Parameter{}, fmt.Errorf("invalid type %s, expected a struct, got %v.", Struct.String(), Struct.Kind())
+	}
+
+	var parameters []Parameter
+	for i := 0; i < Struct.NumField(); i++ { // We have checked above that it's a struct.
+		field := Struct.Field(i)
+		// FIXME: We'll need to know if there are any default values.
+		param, err := FromField(field, in)
+		if err != nil {
+			return []Parameter{}, fmt.Errorf("failed to generate spec for parameter %s of type %s: %w", field.Name, Struct.String(), err)
+		}
+		parameters = append(parameters, param)
+	}
+
+	return parameters, nil
 }
 
 type In string
