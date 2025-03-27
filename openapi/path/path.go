@@ -8,6 +8,7 @@ import (
 	"github.com/pasqal-io/gousset/openapi/doc"
 	"github.com/pasqal-io/gousset/openapi/operation"
 	"github.com/pasqal-io/gousset/openapi/parameter"
+	"github.com/pasqal-io/gousset/openapi/security"
 )
 
 // A path in the API.
@@ -44,7 +45,7 @@ type Spec struct {
 	// A list of parameters that are applicable for all the operations described under this path. These parameters can be overridden at the operation level, but cannot be removed there. The list MUST NOT include duplicated parameters. A unique parameter is defined by a combination of a name and location. The list can use the Reference Object to link to parameters that are defined in the OpenAPI Object’s components.parameters.
 	//
 	// In the current implementation, we expect that this contains the path parameters.
-	Parameters *[]parameter.Parameter `json:"parameters"`
+	Parameters *[]parameter.Parameter `json:"parameters,omitempty"`
 
 	Get     *operation.Spec `json:"get,omitempty"`
 	Put     *operation.Spec `json:"put,omitempty"`

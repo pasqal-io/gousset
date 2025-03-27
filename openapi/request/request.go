@@ -1,10 +1,12 @@
 package request
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/pasqal-io/gousset/openapi/doc"
 	"github.com/pasqal-io/gousset/openapi/media"
+	"github.com/pasqal-io/gousset/openapi/schema"
 )
 
 type Request interface {
@@ -36,11 +38,21 @@ var _ Request = Reference{}
 func FromField(from reflect.StructField) (Request, error) {
 	// Extract summary and description.
 	description := doc.GetDescription(from.Type)
+	content := make(map[string]media.Type)
+	schema, err := schema.FromImplementation(schema.Implementation{Type: from.Type, PublicNameKey: "json"})
+	if err != nil {
+		return Spec{}, fmt.Errorf("failed to extract the type of body %s: %w", from.Type.String(), err)
+	}
 
+	// FIXME: Support example.
+
+	content["application/json"] = media.Type{
+		Schema: &schema,
+	}
 	return Spec{
 		Description: description,
 		Required:    from.Type.Kind() != reflect.Ptr,
 		// We do not support content yet.
-		Content: make(map[string]media.Type),
+		Content: content,
 	}, nil
 }

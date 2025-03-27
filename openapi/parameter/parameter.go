@@ -1,10 +1,12 @@
 package parameter
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 
-	tags "github.com/pasqal-io/gousset/inner"
+	"github.com/pasqal-io/gousset/inner/serialization"
+	tags "github.com/pasqal-io/gousset/inner/tags"
 	"github.com/pasqal-io/gousset/openapi/doc"
 	"github.com/pasqal-io/gousset/openapi/example"
 	"github.com/pasqal-io/gousset/openapi/media"
@@ -28,25 +30,30 @@ type Spec struct {
 	// The location of the parameter. Possible values are "query", "header", "path" or "cookie".
 	In In `json:"in"`
 
-	// Short summary.
-	Summary string `json:"summary"`
-
-	// Longer description. May include Markdown.
+	// Description. May include Markdown.
 	Description *string `json:"description,omitempty"`
 
-	Required bool `json:"required"`
+	Required bool `json:"required,omitempty"`
 
-	Deprecated bool `json:"deprecated"`
+	Deprecated bool `json:"deprecated,omitempty"`
 
 	// Structure and syntax of the parameter.
 	//
 	// Mutually exclusive with Schema.
-	*ContentSpec `json:"content,omitempty"`
+	*ContentSpec `json:"content,omitempty" flatten:""`
 
 	// Media type and schema for the parameter.
 	//
 	// Mutually exclusive with Content.
 	*SchemaSpec `json:"schema,omitempty"`
+}
+
+func (s Spec) MarshalJSON() ([]byte, error) {
+	flattened, err := serialization.FlattenStructToJSON(s)
+	if err != nil {
+		return []byte{}, fmt.Errorf("error while flattening Spec for serialization: %w, ", err)
+	}
+	return json.Marshal(flattened)
 }
 
 func FromField(from reflect.StructField, in In) (Spec, error) {
@@ -63,14 +70,13 @@ func FromField(from reflect.StructField, in In) (Spec, error) {
 	}
 
 	// Extract summary and description.
-	summary := doc.GetSummary(from.Type)
 	description := doc.GetDescription(from.Type)
 
-	if summary == nil {
-		if tagSummary, ok := tags.Lookup("summary"); ok && len(tagSummary) >= 1 {
-			summary = shared.Ptr(tagSummary[0])
+	if description == nil {
+		if tagSummary, ok := tags.Lookup("description"); ok && len(tagSummary) >= 1 {
+			description = shared.Ptr(tagSummary[0])
 		} else {
-			return Spec{}, fmt.Errorf("field %s doesn't have a summary, please provide a method Summary() or a tag `summary`", from.Name)
+			return Spec{}, fmt.Errorf("field %s doesn't have a description, please provide a method Description() or a tag `description`", from.Name)
 		}
 	}
 
@@ -84,7 +90,7 @@ func FromField(from reflect.StructField, in In) (Spec, error) {
 		required = false
 	}
 
-	schema, err := schema.FromType(from.Type, publicNameKey)
+	schema, err := schema.FromImplementation(schema.Implementation{Type: from.Type, PublicNameKey: publicNameKey})
 	if err != nil {
 		return Spec{}, fmt.Errorf("failed to find schema for field %s: %w", from.Name, err)
 	}
@@ -97,7 +103,6 @@ func FromField(from reflect.StructField, in In) (Spec, error) {
 	return Spec{
 		Name:        *tagFieldName, // Non-nil, checked above.
 		In:          in,
-		Summary:     *summary, // Non-nil, checked above.
 		Description: description,
 		Deprecated:  deprecated,
 		Required:    required,
@@ -150,16 +155,24 @@ func (Reference) parameter() {
 var _ Parameter = Reference{}
 
 type SchemaSpec struct {
+	schema.Schema `flatten:""`
+
 	// Describes how the parameter value will be serialized depending on the type of the parameter value. Default values (based on value of in): for "query" - "form"; for "path" - "simple"; for "header" - "simple"; for "cookie" - "form".
 	Style *string `json:"style,omitempty"`
 
 	// When this is true, parameter values of type array or object generate separate parameters for each value of the array or key-value pair of the map. For other types of parameters this field has no effect. When style is "form", the default value is true. For all other styles, the default value is false. Note that despite false being the default for deepObject, the combination of false with deepObject is undefined.
 	Explode *bool `json:"explode,omitempty"`
 
-	Schema schema.Schema `json:"schema"`
-
 	Example  *shared.Json       `json:"example,omitempty"`
 	Examples *[]example.Example `json:"examples,omitempty"`
+}
+
+func (s SchemaSpec) MarshalJSON() ([]byte, error) {
+	flattened, err := serialization.FlattenStructToJSON(s)
+	if err != nil {
+		return []byte{}, fmt.Errorf("error while flattening SchemaSpec for serialization: %w, ", err)
+	}
+	return json.Marshal(flattened)
 }
 
 type ContentSpec struct {

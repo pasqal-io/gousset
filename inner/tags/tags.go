@@ -148,6 +148,17 @@ func (tags Tags) PublicFieldName(key string) *string {
 	return &result[0]
 }
 
+// Return true if the field is marked as omit empty
+// for this key (e.g. `json:"foo,omitempty"`)
+func (tags Tags) ShouldOmitEmpty(key string) bool {
+	tags.witness.Assert()
+	result, ok := tags.tags[key]
+	if !ok || len(result) <= 1 {
+		return false
+	}
+	return result[1] == "omitempty"
+}
+
 // Return `true` if this field should be considered pre-initialized
 // (i.e. the parser should not complain of any fields immediately within
 // that field), `false` otherwise.
@@ -190,4 +201,53 @@ func (tags Tags) Lookup(key string) ([]string, bool) {
 	tags.witness.Assert()
 	result, ok := tags.tags[key]
 	return result, ok
+}
+
+// Lookup a key.
+func (tags Tags) LookupString(key string) *string {
+	tags.witness.Assert()
+	slice, ok := tags.tags[key]
+	if !ok || len(slice) == 0 {
+		return nil
+	}
+	return &slice[0]
+}
+
+// Lookup a key.
+func (tags Tags) LookupAny(key string) *any {
+	tags.witness.Assert()
+	slice, ok := tags.tags[key]
+	if !ok || len(slice) == 0 {
+		return nil
+	}
+	var found any = slice[0]
+	return &found
+}
+
+// Lookup a key.
+func (tags Tags) LookupFloat(key string) (*float64, error) {
+	tags.witness.Assert()
+	slice, ok := tags.tags[key]
+	if !ok || len(slice) == 0 {
+		return nil, nil
+	}
+	found, err := strconv.ParseFloat(slice[0], 64)
+	if err != nil {
+		return nil, fmt.Errorf("error while attempting to parse tag %s as float: %w", key, err)
+	}
+	return &found, nil
+}
+
+// Lookup a key.
+func (tags Tags) LookupInt(key string) (*int64, error) {
+	tags.witness.Assert()
+	slice, ok := tags.tags[key]
+	if !ok || len(slice) == 0 {
+		return nil, nil
+	}
+	found, err := strconv.ParseInt(slice[0], 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("error while attempting to parse tag %s as integer: %w", key, err)
+	}
+	return &found, nil
 }

@@ -1,3 +1,4 @@
+// Examples provided as part of the OpenAPI spec.
 package example
 
 import (
@@ -6,9 +7,12 @@ import (
 	"github.com/pasqal-io/gousset/openapi/shared"
 )
 
+// Example Object | Reference Object
 type Example interface {
 	sealed()
 }
+
+// https://spec.openapis.org/oas/v3.0.1.html#example-object
 type Spec struct {
 	Summary       string
 	Description   string
@@ -20,18 +24,23 @@ func (Spec) sealed() {}
 
 var _ Example = Spec{}
 
-type Reference struct {
-	Ref         string `json:"$ref"`
-	Summary     string `json:"summary"`
-	Description string `json:"description"`
+// A reference.
+type Reference shared.Reference
+
+func Ref(to string) Reference {
+	return Reference(shared.Ref(to))
 }
 
-// A field/struct/... that has a single example without further comments.
+func (Reference) sealed() {}
+
+var _ Example = Reference{}
+
+// Implement this to add a single example of a type without comments.
 type HasExample interface {
 	Example() shared.Json
 }
 
-// A field/struct/... that has detailed examples.
+// Imlpement this to add examples to a type with comments.
 type HasExamples interface {
 	Examples() map[string]Example
 }

@@ -31,12 +31,14 @@ type Spec struct {
 	Parameters []parameter.Parameter `json:"parameters,omitempty"`
 
 	// The body expected by this operation.
-	Request *request.Request `json:"request,omitempty"`
+	Request *request.Request `json:"requestBody,omitempty"`
 
 	// The responses that this operation may return.
-	Responses *response.Responses `json:"response,omitempty"`
+	Responses response.Responses `json:"responses"`
 }
 
+// User-provided metadata containing information on the implementation
+// to be converted to OpenAPI spec.
 type Implementation struct {
 	// The input type.
 	//
@@ -54,6 +56,7 @@ type Implementation struct {
 	Summary      string
 	Description  *string
 	ExternalDocs *doc.External
+	Responses    response.Implementation
 }
 
 // Extract an OpenAPI spec for an operation from a description of the implementation.
@@ -71,7 +74,7 @@ func FromImplementation(impl Implementation) (Spec, error) {
 	addParameters := func(field string, in parameter.In, typ reflect.Type) error {
 		param, err := parameter.FromStruct(typ, in)
 		if err != nil {
-			return fmt.Errorf("failed to extract spec for %s of %s: %w", field, operationId, err)
+			return fmt.Errorf("while compiling operation %s %s, failed to extract spec for %s of %s: %w", impl.Verb, impl.Path, field, operationId, err)
 		}
 		result.Parameters = append(result.Parameters, param...)
 		return nil
@@ -82,7 +85,7 @@ func FromImplementation(impl Implementation) (Spec, error) {
 		case "Body":
 			request, err := request.FromField(field)
 			if err != nil {
-				return Spec{}, fmt.Errorf("failed to extract body spec for %s: %w", operationId, err)
+				return Spec{}, fmt.Errorf("while compiling operation %s %s, failed to extract body spec for %s: %w", impl.Verb, impl.Path, operationId, err)
 			}
 			result.Request = &request
 		case "Path":
@@ -101,8 +104,13 @@ func FromImplementation(impl Implementation) (Spec, error) {
 				return Spec{}, err
 			}
 		default:
-			return Spec{}, fmt.Errorf("invalid input type %s, it may not have fields other than Path, Query, Header, Body, found %s", impl.Input.String(), field.Name)
+			return Spec{}, fmt.Errorf("while compiling operation %s %s, invalid input type %s, it may not have fields other than Path, Query, Header, Body, found %s", impl.Verb, impl.Path, impl.Input.String(), field.Name)
 		}
 	}
+	responses, err := response.FromImplementation(impl.Responses)
+	if err != nil {
+		return Spec{}, fmt.Errorf("while compiling operation %s %s, invalid response: %w", impl.Verb, impl.Path, err)
+	}
+	result.Responses = responses
 	return result, nil
 }

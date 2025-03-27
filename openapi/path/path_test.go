@@ -27,16 +27,16 @@ type SomeStruct struct {
 	String string `json:"a_string"`
 }
 type MyBody struct {
-	Numbers []int      `json:"some_numbers" summary:"expecting a few integers"`
-	Object  SomeStruct `json:"an_object" summary:"expecting an object"`
+	Numbers []int      `json:"some_numbers" description:"expecting a few integers"`
+	Object  SomeStruct `json:"an_object" description:"expecting an object"`
 }
 
 type MyPath struct {
-	Legends []string `path:"some_strings" summary:"expecting a few strings"`
+	Legends []string `path:"some_strings" description:"expecting a few strings"`
 }
 
 type MyQuery struct {
-	Numbers []int `path:"path_numbers" query:"query_numbers" summary:"expecting a few integers"`
+	Numbers []int `path:"path_numbers" query:"query_numbers" description:"expecting a few integers"`
 }
 
 type BodyPathQuery struct {
@@ -66,84 +66,118 @@ func TestFromPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testutils.EqualJSON(t, result, `{"summary": "Clearly, this is a path",
-        "parameters": null,
-        "get": {
-          "summary": "",
-          "operationId": "get /foo/bar",
-          "parameters": [
-            {
-              "name": "some_strings",
-              "in": "path",
-              "summary": "expecting a few strings",
-              "required": true,
-              "deprecated": false,
-              "schema": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              }
-            },
-            {
-              "name": "query_numbers",
-              "in": "query",
-              "summary": "expecting a few integers",
-              "required": true,
-              "deprecated": false,
-              "schema": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "number"
-                  }
-                }
-              }
-            }
-          ]
-        },
-        "post": {
-          "summary": "",
-          "operationId": "post /foo/bar",
-          "parameters": [
-            {
-              "name": "some_strings",
-              "in": "path",
-              "summary": "expecting a few strings",
-              "required": true,
-              "deprecated": false,
-              "schema": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "string"
-                  }
-                }
-              }
-            },
-            {
-              "name": "query_numbers",
-              "in": "query",
-              "summary": "expecting a few integers",
-              "required": true,
-              "deprecated": false,
-              "schema": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "number"
-                  }
-                }
-              }
-            }
-          ],
-          "request": {
-            "required": true,
-            "content": {}
-          }
-        }
-      }
-	`)
+	testutils.EqualJSON(t, result, `{
+		"summary": "Clearly, this is a path",
+		"get": {
+			"summary": "",
+			"operationId": "get /foo/bar",
+			"parameters": [
+			{
+				"description": "expecting a few strings",
+				"in": "path",
+				"name": "some_strings",
+				"required": true,
+				"schema": {
+				"items": {
+					"type": "string"
+				},
+				"type": "array"
+				}
+			},
+			{
+				"description": "expecting a few integers",
+				"in": "query",
+				"name": "query_numbers",
+				"required": true,
+				"schema": {
+				"items": {
+					"type": "number",
+					"format": "int32"
+				},
+				"type": "array"
+				}
+			}
+			],
+			"responses": {
+			"default": {
+				"description": ""
+			}
+			}
+		},
+		"post": {
+			"summary": "",
+			"operationId": "post /foo/bar",
+			"parameters": [
+			{
+				"description": "expecting a few strings",
+				"in": "path",
+				"name": "some_strings",
+				"required": true,
+				"schema": {
+				"items": {
+					"type": "string"
+				},
+				"type": "array"
+				}
+			},
+			{
+				"description": "expecting a few integers",
+				"in": "query",
+				"name": "query_numbers",
+				"required": true,
+				"schema": {
+				"items": {
+					"type": "number",
+					"format": "int32"
+				},
+				"type": "array"
+				}
+			}
+			],
+			"requestBody": {
+			"required": true,
+			"content": {
+				"application/json": {
+				"schema": {
+					"type": "object",
+					"required": [
+					"some_numbers",
+					"an_object"
+					],
+					"properties": {
+					"an_object": {
+						"type": "object",
+						"required": [
+						"an_int",
+						"a_string"
+						],
+						"properties": {
+						"a_string": {
+							"type": "string"
+						},
+						"an_int": {
+							"type": "number",
+							"format": "int32"
+						}
+						}
+					},
+					"some_numbers": {
+						"type": "array",
+						"items": {
+						"type": "number",
+						"format": "int32"
+						}
+					}
+					}
+				}
+				}
+			}
+			},
+			"responses": {
+			"default": {
+				"description": ""
+			}
+			}
+		}
+	}`)
 }
