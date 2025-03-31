@@ -24,6 +24,7 @@ type Responses struct {
 	*PerCode
 }
 
+// Responses that this call may return, by http code.
 type PerCode = map[uint16]Response
 
 type Spec struct {

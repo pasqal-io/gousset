@@ -1,50 +1,79 @@
 package security
 
+// A list of security requirements for an endpoint.
+//
+// Each name MUST correspond to a security scheme which is declared in the Security Schemes under the Components Object. If the security scheme is of type "oauth2" or "openIdConnect", then the value is a list of scope names required for the execution, and the list MAY be empty if authorization does not require a specified scope. For other security scheme types, the array MAY contain a list of role names which are required for the execution, but are not otherwise defined or exchanged in-band.
 type Requirement = map[string][]string
 
+// A security scheme.
 type Scheme interface {
 	sealed()
 }
-type Reference string
+
+// A reference to a security scheme defined in Components.
+type Reference struct {
+	Ref string `json:"$ref"`
+}
 
 func Ref(to string) Reference {
-	return Reference(to)
+	return Reference{
+		Ref: to,
+	}
 }
 func (Reference) sealed() {}
 
-var _ Scheme = Reference("")
+var _ Scheme = Ref("")
 
+// The specification of a security scheme.
 type Spec struct {
-	Type        Type   `json:"type"`
-	Description string `json:"description"`
-	Name        string `json:"name"`
+	// The type of security, e.g. oauth2.
+	Type Type `json:"type"`
+
+	// The name of the header, query or cookie parameter used.
+	Name string `json:"name"`
+
+	// A human readable description. May contain markdown.
+	Description *string `json:"description,omitempty"`
+
+	// Poor man's sum type. Provided iff Type is TypeAPIKey.
 	*ApiKey
+
+	// Poor man's sum type. Provided iff Type is TypeHttp.
 	*Http
+
+	// Poor man's sum type. Provided iff Type is TypeOAuth2.
 	*Oauth2
+
+	// Poor man's sum type. Provided iff Type is TypeOpenIdConnect.
 	*OpenIdConnect
 }
 
+// A type of security.
 type Type string
 
 const (
-	TypeAPIKey        = Reference("apiKey")
-	TypeHttp          = Reference("http")
-	TypeMutalTLS      = Reference("mutualTLS")
-	TypeOAuth2        = Reference("oauth2")
-	TypeOpenIdConnect = Reference("openIDConnect")
+	TypeAPIKey        = Type("apiKey")
+	TypeHttp          = Type("http")
+	TypeMutalTLS      = Type("mutualTLS")
+	TypeOAuth2        = Type("oauth2")
+	TypeOpenIdConnect = Type("openIDConnect")
 )
 
-type In string
+// An emplacement where the authentication may be stored.
+type ApiKeyIn string
 
 const (
-	InQuery  = In("query")
-	InHeader = In("header")
-	InCookie = In("cookie")
+	ApiKeyInQuery  = ApiKeyIn("query")
+	ApiKeyInHeader = ApiKeyIn("header")
+	ApiKeyInCookie = ApiKeyIn("cookie")
 )
 
 type ApiKey struct {
+	// The name of the field containing the API key.
 	Name string `json:"string"`
-	In   In     `json:"in"`
+
+	// Where the API key is stored.
+	In ApiKeyIn `json:"in"`
 }
 
 type Http struct {
@@ -61,15 +90,29 @@ type OpenIdConnect struct {
 }
 
 type OAuthFlows struct {
-	Implicit          OAuthFlow `json:"implicit"`
-	Password          OAuthFlow `json:"password"`
-	ClientCredentials OAuthFlow `json:"clientCredentials"`
-	AuthorizationCode OAuthFlow `json:"authorizationCode"`
+	// Configuration for the OAuth implicit flow.
+	Implicit *OAuthFlow `json:"implicit,omitempty"`
+
+	// Configuration for the OAuth password flow.
+	Password *OAuthFlow `json:"password,omitempty"`
+
+	// Configuration for the OAuth client credentials (aka "application") flow.
+	ClientCredentials *OAuthFlow `json:"clientCredentials,omitempty"`
+
+	// Configuration for the OAuth authorization code (aka "accesCode") flow.
+	AuthorizationCode *OAuthFlow `json:"authorizationCode,omitempty"`
 }
 
 type OAuthFlow struct {
-	AuthorizationUrl string            `json:"authorizationUrl"`
-	TokenUrl         string            `json:"tokenUrl"`
-	RefreshUrl       *string           `json:"refreshUrl"`
-	Scopes           map[string]string `json:"scopes"`
+	// The authorization URL to be used for this flow. This MUST be in the form of a URL. The OAuth2 standard requires the use of TLS.
+	AuthorizationUrl string `json:"authorizationUrl"`
+
+	// The token URL to be used for this flow. This MUST be in the form of a URL. The OAuth2 standard requires the use of TLS.
+	TokenUrl string `json:"tokenUrl"`
+
+	// The URL to be used for obtaining refresh tokens. This MUST be in the form of a URL. The OAuth2 standard requires the use of TLS.
+	RefreshUrl *string `json:"refreshUrl,omitempty"`
+
+	// The available scopes for the OAuth2 security scheme. A map between the scope name and a short description for it. The map MAY be empty.
+	Scopes map[string]string `json:"scopes"`
 }
