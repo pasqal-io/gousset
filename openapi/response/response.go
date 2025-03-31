@@ -15,15 +15,13 @@ type Response interface {
 	sealed()
 }
 
-type Reference struct {
-	Ref string `json:"$ref"`
-}
+// A reference to a Component.
+type Reference shared.Reference
 
 func Ref(to string) Reference {
-	return Reference{
-		Ref: to,
-	}
+	return Reference(shared.Ref(to))
 }
+
 func (Reference) sealed() {}
 
 var _ Response = Ref("")

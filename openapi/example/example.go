@@ -24,7 +24,7 @@ func (Spec) sealed() {}
 
 var _ Example = Spec{}
 
-// A reference.
+// A reference to a Component.
 type Reference shared.Reference
 
 func Ref(to string) Reference {

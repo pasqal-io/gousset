@@ -7,6 +7,7 @@ import (
 	"github.com/pasqal-io/gousset/openapi/doc"
 	"github.com/pasqal-io/gousset/openapi/media"
 	"github.com/pasqal-io/gousset/openapi/schema"
+	"github.com/pasqal-io/gousset/openapi/shared"
 )
 
 type Request interface {
@@ -24,11 +25,11 @@ type Spec struct {
 
 func (Spec) sealed() {}
 
-// Reference to a body described in the OpenAPI components.
-type Reference struct {
-	Ref         string  `json:"$ref"`
-	Summary     *string `json:"summary,omitempty"`
-	Description *string `json:"description,omitempty"`
+// A reference to a Component.
+type Reference shared.Reference
+
+func Ref(to string) Reference {
+	return Reference(shared.Ref(to))
 }
 
 func (Reference) sealed() {}

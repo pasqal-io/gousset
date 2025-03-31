@@ -1,5 +1,7 @@
 package link
 
+import "github.com/pasqal-io/gousset/openapi/shared"
+
 type Link interface {
 	sealed()
 }
@@ -14,14 +16,11 @@ func (Spec) sealed() {}
 
 var _ Link = Spec{}
 
-type Reference struct {
-	Ref string `json:"$ref"`
-}
+// A reference to a Component.
+type Reference shared.Reference
 
 func Ref(to string) Reference {
-	return Reference{
-		Ref: to,
-	}
+	return Reference(shared.Ref(to))
 }
 
 func (Reference) sealed() {}
