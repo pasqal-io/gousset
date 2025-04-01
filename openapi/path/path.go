@@ -3,11 +3,14 @@ package path
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 	"strings"
 
+	"github.com/iancoleman/strcase"
 	"github.com/pasqal-io/gousset/openapi/doc"
 	"github.com/pasqal-io/gousset/openapi/operation"
 	"github.com/pasqal-io/gousset/openapi/parameter"
+	"github.com/pasqal-io/gousset/openapi/response"
 	"github.com/pasqal-io/gousset/openapi/security"
 )
 
@@ -16,11 +19,18 @@ import (
 // MUST start with `/`. Path templating is allowed.
 type Route string
 
+var routeTemplateRegex = regexp.MustCompile("/:([^/]*)")
+
 func MakeRoute(path string) (Route, error) {
-	if strings.HasPrefix(path, "/") {
-		return Route(path), nil
+	if !strings.HasPrefix(path, "/") {
+		return "<error>", fmt.Errorf("expected a path, starting with '/', got \"%s\"", path)
 	}
-	return "<error>", fmt.Errorf("expected a path, starting with '/', got \"%s\"", path)
+	// Convert "/:foo"-style captures to "/{foo}"-style captures.
+	replaced := routeTemplateRegex.ReplaceAllFunc([]byte(path), func(b []byte) []byte {
+		subpath, _ := strings.CutPrefix(string(b), "/:")
+		return []byte(fmt.Sprint("/{", strcase.ToLowerCamel(subpath), "}"))
+	})
+	return Route(replaced), nil
 }
 
 // The HTTP verbs.
@@ -32,6 +42,8 @@ const (
 	Post    = Verb("post")
 	Delete  = Verb("delete")
 	Options = Verb("options")
+	Patch   = Verb("patch")
+	Head    = Verb("head")
 )
 
 // Specifications for one path (all verbs).
@@ -71,6 +83,7 @@ type VerbImplementation struct {
 	Summary      string
 	Description  *string
 	ExternalDocs *doc.External
+	Response     response.Implementation
 }
 
 func FromPath(impl Implementation) (Spec, error) {
@@ -89,6 +102,7 @@ func FromPath(impl Implementation) (Spec, error) {
 			Summary:      verbImpl.Summary,
 			Description:  verbImpl.Description,
 			ExternalDocs: verbImpl.ExternalDocs,
+			Responses:    verbImpl.Response,
 		})
 		if err != nil {
 			return Spec{}, fmt.Errorf("failed to extract specs for operation %s at %s: %w", verb, impl.Path, err)

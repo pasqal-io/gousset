@@ -3,8 +3,10 @@ package parameter
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"reflect"
 
+	"github.com/iancoleman/strcase"
 	"github.com/pasqal-io/gousset/inner/serialization"
 	tags "github.com/pasqal-io/gousset/inner/tags"
 	"github.com/pasqal-io/gousset/openapi/doc"
@@ -56,17 +58,23 @@ func (s Spec) MarshalJSON() ([]byte, error) {
 	return json.Marshal(flattened)
 }
 
-func FromField(from reflect.StructField, in In) (Spec, error) {
+func FromField(container reflect.Type, from reflect.StructField, in In) (Spec, error) {
 	publicNameKey := string(in)
 	tags, err := tags.Parse(from.Tag)
 	if err != nil {
-		return Spec{}, fmt.Errorf("failed to parse tags for field %s, got %w", from.Name, err)
+		return Spec{}, fmt.Errorf("while compiling individual parameter from field %s.%s, failed to parse tags: %w", container.String(), from.Name, err)
 	}
 
-	// We make the decision of only documenting fields that have a public field name.
-	tagFieldName := tags.PublicFieldName(publicNameKey)
-	if tagFieldName == nil {
-		return Spec{}, fmt.Errorf("field %s is missing a public name", from.Name)
+	// If a public name exists, use it.
+	publicFieldName := tags.PublicFieldName(publicNameKey)
+	if publicFieldName == nil {
+		publicFieldName = shared.Ptr(strcase.ToLowerCamel(from.Name))
+		slog.Warn("gousset.openapi.parameter.FromField: field is missing a tag with a public name, falling back to default",
+			"struct", container.String(),
+			"field", from.Name,
+			"origin", in,
+			"missing_tag", publicNameKey,
+			"default", *publicFieldName)
 	}
 
 	// Extract summary and description.
@@ -76,7 +84,9 @@ func FromField(from reflect.StructField, in In) (Spec, error) {
 		if tagSummary, ok := tags.Lookup("description"); ok && len(tagSummary) >= 1 {
 			description = shared.Ptr(tagSummary[0])
 		} else {
-			return Spec{}, fmt.Errorf("field %s doesn't have a description, please provide a method Description() or a tag `description`", from.Name)
+			slog.Warn("gousset.openapi.parameter.FromField: field is missing a description, please add a tag `description` to the field or a method `Description()` to its type",
+				"struct", container.String(),
+				"field", from.Name)
 		}
 	}
 
@@ -92,7 +102,7 @@ func FromField(from reflect.StructField, in In) (Spec, error) {
 
 	schema, err := schema.FromImplementation(schema.Implementation{Type: from.Type, PublicNameKey: publicNameKey})
 	if err != nil {
-		return Spec{}, fmt.Errorf("failed to find schema for field %s: %w", from.Name, err)
+		return Spec{}, fmt.Errorf("while compiling individual parameter from field %s.%s, failed to find schema for field: %w", container.String(), from.Name, err)
 	}
 	schemaSpec := SchemaSpec{
 		Style:   nil,
@@ -101,7 +111,7 @@ func FromField(from reflect.StructField, in In) (Spec, error) {
 	}
 
 	return Spec{
-		Name:        *tagFieldName, // Non-nil, checked above.
+		Name:        *publicFieldName, // Non-nil, checked above.
 		In:          in,
 		Description: description,
 		Deprecated:  deprecated,
@@ -112,16 +122,16 @@ func FromField(from reflect.StructField, in In) (Spec, error) {
 
 func FromStruct(Struct reflect.Type, in In) ([]Parameter, error) {
 	if Struct.Kind() != reflect.Struct {
-		return []Parameter{}, fmt.Errorf("invalid type %s, expected a struct, got %v.", Struct.String(), Struct.Kind())
+		return []Parameter{}, fmt.Errorf("while attempting to compile parameter list from struct, invalid type %s, expected a struct, got %v.", Struct.String(), Struct.Kind())
 	}
 
 	var parameters []Parameter
 	for i := 0; i < Struct.NumField(); i++ { // We have checked above that it's a struct.
 		field := Struct.Field(i)
 		// FIXME: We'll need to know if there are any default values.
-		param, err := FromField(field, in)
+		param, err := FromField(Struct, field, in) // FIXME: This fails if the field is flattened!
 		if err != nil {
-			return []Parameter{}, fmt.Errorf("failed to generate spec for parameter %s of type %s: %w", field.Name, Struct.String(), err)
+			return []Parameter{}, fmt.Errorf("while attempting to compile parameter list from struct, failed to generate spec for parameter %s of type %s: %w", field.Name, Struct.String(), err)
 		}
 		parameters = append(parameters, param)
 	}

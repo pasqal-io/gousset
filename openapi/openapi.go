@@ -8,6 +8,7 @@ package openapi
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/pasqal-io/gousset/openapi/doc"
 	"github.com/pasqal-io/gousset/openapi/example"
@@ -124,6 +125,9 @@ type Implementation struct {
 
 	// Any additional external documentation.
 	ExternalDocs *doc.External
+
+	// Definition of the security schemes used for endpoints.
+	SecuritySchemes *map[string]security.Scheme `exhaustruct:"optional"`
 }
 
 // Build a complete OpenAPI spec from a description of an implementation.
@@ -132,7 +136,17 @@ func FromImplementation(implem Implementation) (Spec, error) {
 		OpenApiVersion: OpenApiVersion,
 		Info:           implem.Info,
 		ExternalDocs:   implem.ExternalDocs,
+		Components: Components{
+			SecuritySchemes: implem.SecuritySchemes,
+		},
 	}
+	if result.Info.Title == "" {
+		slog.Warn("gousset.openapi.FromImplementation: missing title")
+	}
+	if result.Info.Description == nil {
+		slog.Warn("gousset.openapi.FromImplementation: missing description")
+	}
+
 	paths := make(map[path.Route]path.Spec)
 	result.Paths = paths
 	for _, pathImpl := range implem.Endpoints {

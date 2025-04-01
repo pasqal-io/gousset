@@ -8,6 +8,7 @@ package schema
 import (
 	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/pasqal-io/gousset/inner/tags"
 	"github.com/pasqal-io/gousset/openapi/doc"
@@ -83,10 +84,10 @@ type Object struct {
 	// list of properties.
 	Properties map[string]Schema `json:"properties,omitempty"`
 
-	// A list of regexps for additional fields, with their associated
-	// type. Use this if your object is used as a map, with an unknown
-	// list of properties.
-	PatternProperties map[string]Schema `json:"patternProperties,omitempty"`
+	// The types of values used in this object. Use this if your object
+	// is used as a map, with an unknown list of properties, all of them
+	// with the same type.
+	AdditionalProperties *Schema `json:"additionalProperties,omitempty"`
 }
 
 func (Object) sealed() {}
@@ -182,6 +183,16 @@ func FromImplementation(impl Implementation) (Schema, error) {
 		if hasEnum, ok := asAny.(HasEnum); ok {
 			share.Enum = shared.Ptr(hasEnum.Enum())
 		}
+		// If this is a time, let's not look further.
+		if isTime(asAny) {
+			share.Type = TypeString
+			if share.Format == nil {
+				share.Format = shared.Ptr(string(FormatDateTime))
+			}
+			return Primitive{
+				Shared: share,
+			}, nil
+		}
 	}
 
 	switch impl.Type.Kind() {
@@ -251,6 +262,9 @@ func FromImplementation(impl Implementation) (Schema, error) {
 			fields = append(fields, impl.Type.Field(i))
 		}
 		for _, field := range fields {
+			if !field.IsExported() {
+				continue
+			}
 			tags, err := tags.Parse(field.Tag)
 			if err != nil {
 				return errorReturn, fmt.Errorf("while compiling schema for struct %s, failed to parse tags for field %s", impl.Type.String(), field.Name)
@@ -322,14 +336,12 @@ func FromImplementation(impl Implementation) (Schema, error) {
 		if err != nil {
 			return errorReturn, fmt.Errorf("while compiling schema for map %s, failed to extract scheme from content: %w", impl.Type.String(), err)
 		}
-		patternedProperties := make(map[string]Schema)
-		patternedProperties["*"] = contentSchema
 		share.Type = TypeObject
 		return Object{
-			Shared:            share,
-			Required:          []string{},
-			Properties:        make(map[string]Schema),
-			PatternProperties: patternedProperties,
+			Shared:               share,
+			Required:             []string{},
+			Properties:           make(map[string]Schema),
+			AdditionalProperties: &contentSchema,
 		}, nil
 	default:
 		return errorReturn, fmt.Errorf("while compiling schema for %s, couldn't find any scheme, you may need to implement HasSchema", impl.Type.String())
@@ -425,3 +437,13 @@ const (
 	FormatByte        = Format("byte")
 	FormatPassword    = Format("password")
 )
+
+func isTime(value any) bool {
+	if _, ok := value.(time.Time); ok {
+		return true
+	}
+	if _, ok := value.(*time.Time); ok {
+		return true
+	}
+	return false
+}

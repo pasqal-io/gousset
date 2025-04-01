@@ -28,24 +28,25 @@ type Spec struct {
 	// The type of security, e.g. oauth2.
 	Type Type `json:"type"`
 
-	// The name of the header, query or cookie parameter used.
-	Name string `json:"name"`
-
 	// A human readable description. May contain markdown.
-	Description *string `json:"description,omitempty"`
+	Description *string `json:"description,omitempty" exhaustruct:"optional"`
 
 	// Poor man's sum type. Provided iff Type is TypeAPIKey.
-	*ApiKey
+	*ApiKey `exhaustruct:"optional"`
 
 	// Poor man's sum type. Provided iff Type is TypeHttp.
-	*Http
+	*Http `exhaustruct:"optional"`
 
 	// Poor man's sum type. Provided iff Type is TypeOAuth2.
-	*Oauth2
+	Flows *OAuthFlows `json:"flows" exhaustruct:"optional"`
 
 	// Poor man's sum type. Provided iff Type is TypeOpenIdConnect.
-	*OpenIdConnect
+	*OpenIdConnect `exhaustruct:"optional"`
 }
+
+func (Spec) sealed() {}
+
+var _ Scheme = Spec{}
 
 // A type of security.
 type Type string
@@ -80,26 +81,22 @@ type Http struct {
 	BearerFormat *string `json:"bearerFormat"`
 }
 
-type Oauth2 struct {
-	Flows OAuthFlows `json:"flows"`
-}
-
 type OpenIdConnect struct {
 	OpenIdConnectUrl string `json:"openIdConnectUrl"`
 }
 
 type OAuthFlows struct {
 	// Configuration for the OAuth implicit flow.
-	Implicit *OAuthFlow `json:"implicit,omitempty"`
+	Implicit *OAuthFlow `json:"implicit,omitempty" exhaustruct:"optional"`
 
 	// Configuration for the OAuth password flow.
-	Password *OAuthFlow `json:"password,omitempty"`
+	Password *OAuthFlow `json:"password,omitempty" exhaustruct:"optional"`
 
 	// Configuration for the OAuth client credentials (aka "application") flow.
-	ClientCredentials *OAuthFlow `json:"clientCredentials,omitempty"`
+	ClientCredentials *OAuthFlow `json:"clientCredentials,omitempty" exhaustruct:"optional"`
 
 	// Configuration for the OAuth authorization code (aka "accesCode") flow.
-	AuthorizationCode *OAuthFlow `json:"authorizationCode,omitempty"`
+	AuthorizationCode *OAuthFlow `json:"authorizationCode,omitempty" exhaustruct:"optional"`
 }
 
 type OAuthFlow struct {
