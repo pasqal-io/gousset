@@ -28,7 +28,7 @@ func MakeRoute(path string) (Route, error) {
 	// Convert "/:foo"-style captures to "/{foo}"-style captures.
 	replaced := routeTemplateRegex.ReplaceAllFunc([]byte(path), func(b []byte) []byte {
 		subpath, _ := strings.CutPrefix(string(b), "/:")
-		return []byte(fmt.Sprint("/{", strcase.ToLowerCamel(subpath), "}"))
+		return []byte(fmt.Sprint("/{", strcase.ToSnake(subpath), "}"))
 	})
 	return Route(replaced), nil
 }
@@ -84,6 +84,7 @@ type VerbImplementation struct {
 	Description  *string
 	ExternalDocs *doc.External
 	Response     response.Implementation
+	Deprecated   bool
 }
 
 func FromPath(impl Implementation) (Spec, error) {
@@ -103,6 +104,7 @@ func FromPath(impl Implementation) (Spec, error) {
 			Description:  verbImpl.Description,
 			ExternalDocs: verbImpl.ExternalDocs,
 			Responses:    verbImpl.Response,
+			Deprecated:   verbImpl.Deprecated,
 		})
 		if err != nil {
 			return Spec{}, fmt.Errorf("failed to extract specs for operation %s at %s: %w", verb, impl.Path, err)

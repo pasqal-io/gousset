@@ -22,10 +22,10 @@ func TestMakeRoute(t *testing.T) {
 
 // Test that /:FooBar-style captures are converted properly.
 func TestMakeRouteConvertsCaptures(t *testing.T) {
-	path, err := path.MakeRoute("/:FOO/:bar/:SnaFu/UPPER_NORMAL/lower_normal/SnakeNormal")
+	path, err := path.MakeRoute("/:FOO/:bar/:SnaFu/UPPER_NORMAL/lower_normal/CamelNormal")
 	assert.NilError(t, err)
 
-	assert.Equal(t, string(path), "/{foo}/{bar}/{snaFu}/UPPER_NORMAL/lower_normal/SnakeNormal")
+	assert.Equal(t, string(path), "/{foo}/{bar}/{sna_fu}/UPPER_NORMAL/lower_normal/CamelNormal")
 }
 
 // Test that we can compile the OpenAPI Spec from a fairly simple implementation.

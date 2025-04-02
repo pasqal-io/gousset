@@ -68,7 +68,11 @@ func FromField(container reflect.Type, from reflect.StructField, in In) (Spec, e
 	// If a public name exists, use it.
 	publicFieldName := tags.PublicFieldName(publicNameKey)
 	if publicFieldName == nil {
-		publicFieldName = shared.Ptr(strcase.ToLowerCamel(from.Name))
+		if publicNameKey == "path" || publicNameKey == "query" {
+			publicFieldName = shared.Ptr(strcase.ToSnake(from.Name))
+		} else {
+			publicFieldName = shared.Ptr(strcase.ToLowerCamel(from.Name))
+		}
 		slog.Warn("gousset.openapi.parameter.FromField: field is missing a tag with a public name, falling back to default",
 			"struct", container.String(),
 			"field", from.Name,

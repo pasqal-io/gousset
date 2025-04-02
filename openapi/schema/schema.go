@@ -135,7 +135,10 @@ type Implementation struct {
 	MinProperties    *int64
 	Enum             *[]any
 	Format           *string
+	Example          *string
 }
+
+var stringType = reflect.TypeOf("")
 
 // Create a schema from a type.
 //
@@ -193,6 +196,10 @@ func FromImplementation(impl Implementation) (Schema, error) {
 				Shared: share,
 			}, nil
 		}
+	}
+	if impl.Example != nil {
+		var example any = *impl.Example
+		share.Example = &example
 	}
 
 	switch impl.Type.Kind() {
@@ -325,7 +332,7 @@ func FromImplementation(impl Implementation) (Schema, error) {
 			Properties: properties,
 		}, nil
 	case reflect.Map:
-		if impl.Type.Key().Kind() != reflect.String {
+		if !isStringifiable(impl.Type.Key()) {
 			return errorReturn, fmt.Errorf("while compiling schema for map %s, this key type isn't supported %s", impl.Type.String(), impl.Type.Key().String())
 		}
 		subImpl := Implementation{
@@ -370,6 +377,7 @@ func ImplementationFromStructField(field reflect.StructField, publicNameKey stri
 		{&result.Title, "title"},
 		{&result.Format, "format"},
 		{&result.Pattern, "pattern"},
+		{&result.Example, "example"},
 	} {
 		*parse.First = tags.LookupString(parse.Second)
 	}
@@ -382,7 +390,8 @@ func ImplementationFromStructField(field reflect.StructField, publicNameKey stri
 	} {
 		parsed, err := tags.LookupFloat(parse.Second)
 		if err != nil {
-			return Implementation{}, fmt.Errorf("while compiling schema for field %s, error: %w",
+			return Implementation{}, fmt.Errorf("while compiling schema for field %s, error within %s key %s: %w",
+				"float", parse.Second,
 				field.Name, err)
 		}
 		*parse.First = parsed
@@ -397,7 +406,8 @@ func ImplementationFromStructField(field reflect.StructField, publicNameKey stri
 	} {
 		parsed, err := tags.LookupInt(parse.Second)
 		if err != nil {
-			return Implementation{}, fmt.Errorf("while compiling schema for field %s, error: %w",
+			return Implementation{}, fmt.Errorf("while compiling schema for field %s, error within %s key %s: %w",
+				"int", parse.Second,
 				field.Name, err)
 		}
 		*parse.First = parsed
@@ -418,6 +428,9 @@ type HasFormat interface {
 // A well-known format.
 type Format string
 
+// Well-known formats.
+//
+// Note that this list doesn't attempt to be exhaustive.
 const (
 	FormatDateTime    = Format("date-time")
 	FormatDate        = Format("date")
@@ -443,6 +456,24 @@ func isTime(value any) bool {
 		return true
 	}
 	if _, ok := value.(*time.Time); ok {
+		return true
+	}
+	return false
+}
+
+type hasString interface {
+	String() string
+}
+
+func isStringifiable(typ reflect.Type) bool {
+	if stringType.ConvertibleTo(typ) {
+		return true
+	}
+	phony := reflect.New(typ)
+	if !phony.CanInterface() {
+		return false
+	}
+	if _, ok := phony.Interface().(hasString); ok {
 		return true
 	}
 	return false

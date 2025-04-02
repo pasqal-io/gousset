@@ -35,6 +35,9 @@ type Spec struct {
 
 	// The responses that this operation may return.
 	Responses response.Responses `json:"responses"`
+
+	// If true, this endpoint is deprecated.
+	Deprecated bool `json:"deprecated,omitempty"`
 }
 
 // User-provided metadata containing information on the implementation
@@ -57,6 +60,7 @@ type Implementation struct {
 	Description  *string
 	ExternalDocs *doc.External
 	Responses    response.Implementation
+	Deprecated   bool
 }
 
 // Extract an OpenAPI spec for an operation from a description of the implementation.
@@ -69,6 +73,7 @@ func FromImplementation(impl Implementation) (Spec, error) {
 		ExternalDocs:         impl.ExternalDocs,
 		OperationId:          operationId,
 		SecurityRequirements: impl.Security,
+		Deprecated:           impl.Deprecated,
 	}
 
 	addParameters := func(field string, in parameter.In, typ reflect.Type) error {

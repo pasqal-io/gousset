@@ -251,3 +251,8 @@ func (tags Tags) LookupInt(key string) (*int64, error) {
 	}
 	return &found, nil
 }
+
+// An `example` tag.
+func (tags Tags) Example() *string {
+	return tags.LookupString("example")
+}

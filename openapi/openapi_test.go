@@ -171,7 +171,6 @@ func TestEndpoints(t *testing.T) {
 	}
 	// The string below has been validated with https://editor.swagger.io/, if you change it,
 	// please validate the new version.
-	//testutils.ValidateOpenAPI(t, spec)
 	testutils.EqualJSONf(t, spec, `{
 		"openapi": "%s",
 		"info": {
