@@ -160,6 +160,17 @@ func fromIsOneOf(impl Implementation, types []reflect.Type) (Schema, error) {
 	return result, nil
 }
 
+func fill[T any, I any](field **T, value any, cb func(I) T) {
+	if *field != nil {
+		return
+	}
+	asInterface, ok := value.(I)
+	if !ok {
+		return
+	}
+	*field = shared.Ptr(cb(asInterface))
+}
+
 // Create a schema from a type.
 //
 // As of this writing, we make no attempt to optimize schemas if e.g. some data structures are repeated.
@@ -197,18 +208,19 @@ func FromImplementation(impl Implementation) (Schema, error) {
 		if hasSchema, ok := asAny.(HasSchema); ok {
 			return hasSchema.Schema(), nil
 		}
-		if hasExternalDocs, ok := asAny.(doc.HasExternalDocs); ok {
-			share.ExternalDocs = shared.Ptr(hasExternalDocs.Docs())
-		}
-		if hasExample, ok := asAny.(example.HasExample); ok {
-			share.Example = shared.Ptr(hasExample.Example())
-		}
-		if hasFormat, ok := asAny.(HasFormat); ok {
-			share.Format = shared.Ptr(string(hasFormat.Format()))
-		}
-		if hasEnum, ok := asAny.(IsEnum); ok {
-			share.Enum = shared.Ptr(hasEnum.Enum())
-		}
+		fill(&share.ExternalDocs, asAny, func(value doc.HasExternalDocs) doc.External { return value.Docs() })
+		fill(&share.Example, asAny, func(value example.HasExample) shared.Json { return value.Example() })
+		fill(&share.Format, asAny, func(value HasFormat) string { return string(value.Format()) })
+		fill(&share.Enum, asAny, func(value IsEnum) []shared.Json { return value.Enum() })
+		fill(&share.MinItems, asAny, func(value HasMinArrayLength) int64 { return value.MinArrayLength() })
+		fill(&share.MaxItems, asAny, func(value HasMaxArrayLength) int64 { return value.MaxArrayLength() })
+		fill(&share.MinLength, asAny, func(value HasMinStringLength) int64 { return value.MinStringLength() })
+		fill(&share.MaxLength, asAny, func(value HasMaxStringLength) int64 { return value.MaxStringLength() })
+		fill(&share.MinProperties, asAny, func(value HasMinMapLength) int64 { return value.MinMapLength() })
+		fill(&share.MaxProperties, asAny, func(value HasMaxMapLength) int64 { return value.MaxMapLength() })
+		fill(&share.Minimum, asAny, func(value HasMin) float64 { return value.Min() })
+		fill(&share.Maximum, asAny, func(value HasMax) float64 { return value.Max() })
+
 		// If this is a time, let's not look further.
 		if isTime(asAny) {
 			share.Type = TypeString
@@ -534,4 +546,44 @@ func isStringifiable(typ reflect.Type) bool {
 		return true
 	}
 	return false
+}
+
+// Implement this to mark a minimal length for a string.
+type HasMinStringLength interface {
+	MinStringLength() int64
+}
+
+// Implement this to mark a maximal length for a string.
+type HasMaxStringLength interface {
+	MaxStringLength() int64
+}
+
+// Implement this to mark a minimal length for an array.
+type HasMinArrayLength interface {
+	MinArrayLength() int64
+}
+
+// Implement this to mark a maximal length for an array.
+type HasMaxArrayLength interface {
+	MaxArrayLength() int64
+}
+
+// Implement this to mark a minimal length for an array.
+type HasMinMapLength interface {
+	MinMapLength() int64
+}
+
+// Implement this to mark a maximal length for an array.
+type HasMaxMapLength interface {
+	MaxMapLength() int64
+}
+
+// Implement this to mark a minimal value for a number.
+type HasMin interface {
+	Min() float64
+}
+
+// Implement this to mark a maximal value for a number.
+type HasMax interface {
+	Max() float64
 }
