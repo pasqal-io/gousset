@@ -8,7 +8,7 @@ import (
 	"github.com/pasqal-io/gousset/openapi/header"
 	"github.com/pasqal-io/gousset/openapi/link"
 	"github.com/pasqal-io/gousset/openapi/media"
-	"github.com/pasqal-io/gousset/openapi/shared"
+	"github.com/pasqal-io/gousset/shared"
 )
 
 type Response interface {

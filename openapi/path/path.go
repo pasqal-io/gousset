@@ -78,13 +78,29 @@ type Implementation struct {
 // User-provided metadata containing information on the implementation
 // to be converted to OpenAPI spec (a single verb at one path).
 type VerbImplementation struct {
-	Input        reflect.Type
-	Security     []security.Requirement
-	Summary      string
-	Description  *string
+	// The type of inputs.
+	//
+	// This must be either the zero value (no input) or a struct containing
+	// no other field than `Body`, `Query`, `Path`, `Header`.
+	Input reflect.Type
+
+	// Security requirements for this endpoint.
+	Security []security.Requirement
+
+	// A human-readable summary explaining what this endpoint does.
+	Summary string
+
+	// A more detailed description. May contain markdown.
+	Description *string
+
+	// Reference to external documentation.
 	ExternalDocs *doc.External
-	Response     response.Implementation
-	Deprecated   bool
+
+	// Information on the response.
+	Response response.Implementation
+
+	// If `true`, mark this endpoint as deprecated.
+	Deprecated bool
 }
 
 func FromPath(impl Implementation) (Spec, error) {

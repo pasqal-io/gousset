@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/kinbiko/jsonassert"
-	"github.com/pasqal-io/gousset/openapi/shared"
+	"github.com/pasqal-io/gousset/shared"
 	"github.com/pb33f/libopenapi"
 	validator "github.com/pb33f/libopenapi-validator"
 )

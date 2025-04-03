@@ -4,7 +4,7 @@ package doc
 import (
 	"reflect"
 
-	"github.com/pasqal-io/gousset/openapi/shared"
+	"github.com/pasqal-io/gousset/shared"
 )
 
 // https://spec.openapis.org/oas/v3.0.1.html#external-documentation-object

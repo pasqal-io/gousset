@@ -13,7 +13,8 @@ import (
 	"github.com/pasqal-io/gousset/inner/tags"
 	"github.com/pasqal-io/gousset/openapi/doc"
 	"github.com/pasqal-io/gousset/openapi/example"
-	"github.com/pasqal-io/gousset/openapi/shared"
+	"github.com/pasqal-io/gousset/shared"
+	"github.com/pasqal-io/gousset/shared/structs"
 )
 
 // A JSON schema.
@@ -140,6 +141,25 @@ type Implementation struct {
 
 var stringType = reflect.TypeOf("")
 
+func fromIsOneOf(impl Implementation, types []reflect.Type) (Schema, error) {
+	result := OneOf{}
+	for _, typ := range types {
+		spec, err := FromImplementation(Implementation{
+			Type:          typ,
+			PublicNameKey: impl.PublicNameKey,
+		})
+		if err != nil {
+			return OneOf{}, fmt.Errorf("while compiling schema for sum type %s, error dealing with case %s: %w",
+				impl.Type.String(),
+				typ.String(),
+				err,
+			)
+		}
+		result.OneOf = append(result.OneOf, spec)
+	}
+	return result, nil
+}
+
 // Create a schema from a type.
 //
 // As of this writing, we make no attempt to optimize schemas if e.g. some data structures are repeated.
@@ -167,6 +187,9 @@ func FromImplementation(impl Implementation) (Schema, error) {
 		Enum:             impl.Enum,
 		Format:           impl.Format,
 	}
+	if isOneOf, ok := registerOneOf[impl.Type]; ok {
+		return fromIsOneOf(impl, isOneOf)
+	}
 	phony := reflect.New(impl.Type)
 	if phony.CanInterface() {
 		asAny := phony.Interface()
@@ -183,7 +206,7 @@ func FromImplementation(impl Implementation) (Schema, error) {
 		if hasFormat, ok := asAny.(HasFormat); ok {
 			share.Format = shared.Ptr(string(hasFormat.Format()))
 		}
-		if hasEnum, ok := asAny.(HasEnum); ok {
+		if hasEnum, ok := asAny.(IsEnum); ok {
 			share.Enum = shared.Ptr(hasEnum.Enum())
 		}
 		// If this is a time, let's not look further.
@@ -203,6 +226,7 @@ func FromImplementation(impl Implementation) (Schema, error) {
 	}
 
 	switch impl.Type.Kind() {
+	case reflect.Interface:
 	case reflect.Pointer:
 		subImpl := impl
 		subImpl.Type = impl.Type.Elem()
@@ -351,7 +375,7 @@ func FromImplementation(impl Implementation) (Schema, error) {
 			AdditionalProperties: &contentSchema,
 		}, nil
 	default:
-		return errorReturn, fmt.Errorf("while compiling schema for %s, couldn't find any scheme, you may need to implement HasSchema", impl.Type.String())
+		return errorReturn, fmt.Errorf("while compiling schema for %s, couldn't find any scheme, you may need to implement IsOneOf or HasSchema or to call RegisterOneOf", impl.Type.String())
 	}
 	// If we have reached this point, we're dealing with a primitive.
 	return Primitive{
@@ -416,12 +440,16 @@ func ImplementationFromStructField(field reflect.StructField, publicNameKey stri
 }
 
 // Implement this on a type to specify that it should be marked as an enum.
-type HasEnum interface {
+//
+// For more sophisticated cases, see `IsOneOf`.
+type IsEnum interface {
+	// The list of possibilities for this enum.
 	Enum() []shared.Json
 }
 
-// Implement this on a type to specify that it should have a given format.
+// Implement this on a string or number to specify that it should match a given format.
 type HasFormat interface {
+	// The format restriction.
 	Format() Format
 }
 
@@ -450,6 +478,35 @@ const (
 	FormatByte        = Format("byte")
 	FormatPassword    = Format("password")
 )
+
+// Implement this to represent a value that can come from several well-known
+// types.
+//
+// If you implement this interface, you MUST call RegisterOneOf.
+//
+// See [sumtypes_test.go] for a complete example.
+type IsOneOf interface {
+	// The main interface (for instance, for a MySum = MyString | MyInt, this should be MySum).
+	Type() reflect.Type
+
+	// Each of the possible variants (for instance, for a MySum = MyString | MyInt, this should be MyString and MySum).
+	Variants() []reflect.Type
+}
+
+// Register a OneOf type.
+//
+// Note: In other languages, this would be a static method of IsOneOf, but
+// there are no such things in Go.
+func RegisterOneOf[T IsOneOf](value T) structs.Nothing {
+	typ := value.Type()
+	if typ.Kind() != reflect.Interface {
+		panic(fmt.Errorf("IsOneOf.Type() MUST return an interface, got %s", typ.String()))
+	}
+	registerOneOf[typ] = value.Variants()
+	return structs.Nothing{}
+}
+
+var registerOneOf = map[reflect.Type][]reflect.Type{}
 
 func isTime(value any) bool {
 	if _, ok := value.(time.Time); ok {

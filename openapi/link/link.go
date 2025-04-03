@@ -1,6 +1,6 @@
 package link
 
-import "github.com/pasqal-io/gousset/openapi/shared"
+import "github.com/pasqal-io/gousset/shared"
 
 type Link interface {
 	sealed()

@@ -4,7 +4,7 @@ package example
 import (
 	"reflect"
 
-	"github.com/pasqal-io/gousset/openapi/shared"
+	"github.com/pasqal-io/gousset/shared"
 )
 
 // Example Object | Reference Object

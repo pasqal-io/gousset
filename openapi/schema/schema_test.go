@@ -7,7 +7,7 @@ import (
 	"github.com/pasqal-io/gousset/openapi/doc"
 	"github.com/pasqal-io/gousset/openapi/example"
 	"github.com/pasqal-io/gousset/openapi/schema"
-	"github.com/pasqal-io/gousset/openapi/shared"
+	"github.com/pasqal-io/gousset/shared"
 	"github.com/pasqal-io/gousset/testutils"
 )
 
@@ -172,8 +172,7 @@ func TestComplexStruc(t *testing.T) {
 			},
 			"string_map": {
 			"type": "object",
-			"patternProperties": {
-				"*": {
+			"additionalProperties": {
 				"type": "object",
 				"required": [
 					"foo",
@@ -186,7 +185,6 @@ func TestComplexStruc(t *testing.T) {
 					"foo": {
 					"type": "string"
 					}
-				}
 				}
 			}
 			}

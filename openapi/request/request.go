@@ -7,7 +7,7 @@ import (
 	"github.com/pasqal-io/gousset/openapi/doc"
 	"github.com/pasqal-io/gousset/openapi/media"
 	"github.com/pasqal-io/gousset/openapi/schema"
-	"github.com/pasqal-io/gousset/openapi/shared"
+	"github.com/pasqal-io/gousset/shared"
 )
 
 type Request interface {

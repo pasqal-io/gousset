@@ -1,4 +1,12 @@
+// Commonly used structs.
 package structs
+
+// An empty struct.
+//
+// Use this for instance for endpoints that take no argument at all,
+// e.g. `GET /health`.
+type Nothing struct {
+}
 
 type Body[B any] struct {
 	Body B

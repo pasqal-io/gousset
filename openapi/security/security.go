@@ -1,6 +1,6 @@
 package security
 
-import "github.com/pasqal-io/gousset/openapi/shared"
+import "github.com/pasqal-io/gousset/shared"
 
 // A list of security requirements for an endpoint.
 //

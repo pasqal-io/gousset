@@ -8,7 +8,7 @@ import (
 	"github.com/pasqal-io/gousset/openapi/example"
 	"github.com/pasqal-io/gousset/openapi/media"
 	"github.com/pasqal-io/gousset/openapi/schema"
-	"github.com/pasqal-io/gousset/openapi/shared"
+	"github.com/pasqal-io/gousset/shared"
 )
 
 type Header interface {

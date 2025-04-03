@@ -9,6 +9,7 @@ import (
 	"github.com/pasqal-io/gousset/openapi/request"
 	"github.com/pasqal-io/gousset/openapi/response"
 	"github.com/pasqal-io/gousset/openapi/security"
+	"github.com/pasqal-io/gousset/shared/structs"
 )
 
 type Spec struct {
@@ -45,7 +46,7 @@ type Spec struct {
 type Implementation struct {
 	// The input type.
 	//
-	// This MUST be a struct.
+	// This MUST be a struct or zero.
 	//
 	// It MUST NOT contain fields other than
 	// - Path
@@ -83,6 +84,11 @@ func FromImplementation(impl Implementation) (Spec, error) {
 		}
 		result.Parameters = append(result.Parameters, param...)
 		return nil
+	}
+	// Zero value, assume the empty struct.
+	if impl.Input.Kind() == reflect.Invalid {
+		// Note: `impl` is passed by copy, so this mutation is not observable.
+		impl.Input = reflect.TypeOf(structs.Nothing{})
 	}
 	for i := 0; i < impl.Input.NumField(); i++ {
 		field := impl.Input.Field(i)

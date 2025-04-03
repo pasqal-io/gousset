@@ -7,9 +7,9 @@ import (
 	"github.com/pasqal-io/gousset/openapi"
 	"github.com/pasqal-io/gousset/openapi/doc"
 	"github.com/pasqal-io/gousset/openapi/path"
-	"github.com/pasqal-io/gousset/openapi/shared"
+	"github.com/pasqal-io/gousset/shared"
+	"github.com/pasqal-io/gousset/shared/structs"
 	"github.com/pasqal-io/gousset/testutils"
-	"github.com/pasqal-io/gousset/testutils/structs"
 )
 
 // Test on an empty spec.

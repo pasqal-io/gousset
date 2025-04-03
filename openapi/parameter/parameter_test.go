@@ -42,6 +42,7 @@ func TestParameterMissingRename(t *testing.T) {
 			}
 		},
 		{
+			"in": "path",
 			"name": "float",
 			"required": true,
 			"schema": {

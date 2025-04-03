@@ -6,7 +6,7 @@ import (
 
 	"github.com/pasqal-io/gousset/openapi/example"
 	"github.com/pasqal-io/gousset/openapi/schema"
-	"github.com/pasqal-io/gousset/openapi/shared"
+	"github.com/pasqal-io/gousset/shared"
 )
 
 type Type struct {
@@ -32,7 +32,7 @@ func FromBody(body reflect.Type, publicNameKey string) (Type, error) {
 // User-provided metadata containing information on the implementation
 // to be converted to OpenAPI spec.
 type Implementation struct {
-	Type          *reflect.Type
+	Type          reflect.Type
 	Example       *shared.Json
 	Examples      *map[string]example.Example
 	PublicNameKey string
@@ -43,8 +43,12 @@ func FromImplementation(impl Implementation) (Type, error) {
 		Example:  impl.Example,
 		Examples: impl.Examples,
 	}
-	if impl.Type != nil {
-		typ, err := schema.FromImplementation(schema.Implementation{Type: *impl.Type, PublicNameKey: impl.PublicNameKey})
+	// Default to json.
+	if impl.PublicNameKey == "" {
+		impl.PublicNameKey = "json"
+	}
+	if impl.Type.Kind() != reflect.Invalid {
+		typ, err := schema.FromImplementation(schema.Implementation{Type: impl.Type, PublicNameKey: impl.PublicNameKey})
 		if err != nil {
 			return result, fmt.Errorf("while collecting media type, error: %w", err)
 		}
