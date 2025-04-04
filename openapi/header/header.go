@@ -30,8 +30,8 @@ type Spec struct {
 	Description  *string `json:"description"`
 	Required     bool    `json:"required"`
 	Deprecated   bool    `json:"deprecated"`
-	*SchemaSpec  `json:"-1,omitempty" flatten:""`
-	*ContentSpec `json:"-2,omitempty" flatten:""`
+	*SchemaSpec  `json:"<renaming ignored>,omitempty" flatten:""`
+	*ContentSpec `json:"<renaming also ignored>,omitempty" flatten:""`
 }
 
 func (Spec) sealed() {}

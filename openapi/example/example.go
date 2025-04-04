@@ -40,7 +40,7 @@ type HasExample interface {
 	Example() shared.Json
 }
 
-// Imlpement this to add examples to a type with comments.
+// Implement this to add commented examples.
 type HasExamples interface {
 	Examples() map[string]Example
 }
