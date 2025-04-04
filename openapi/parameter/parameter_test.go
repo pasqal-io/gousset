@@ -4,132 +4,172 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/pasqal-io/gousset/openapi/doc"
 	"github.com/pasqal-io/gousset/openapi/parameter"
 	"github.com/pasqal-io/gousset/testutils"
 	"gotest.tools/assert"
 )
 
-// Operations should fail if there is no public name.
-func TestOperationMissingRawName(t *testing.T) {
-	type SimpleStructNoSummary struct {
+// Operations should succeed if there is no public name, with a default public name.
+//
+// Note: Warnings expected.
+func TestParameterMissingRename(t *testing.T) {
+	type SimpleStruct struct {
 		Bool   bool
 		Int    int
 		Float  float32
 		String string
 	}
-	sample := SimpleStructNoSummary{}
-	_, err := parameter.FromStruct(reflect.TypeOf(sample), parameter.InPath)
-	assert.ErrorContains(t, err, "missing a public name")
+	sample := SimpleStruct{}
+	parameters, err := parameter.FromStruct(reflect.TypeOf(sample), parameter.InPath)
+	assert.NilError(t, err)
+
+	testutils.EqualJSON(t, parameters, `[
+		{
+			"in": "path",
+			"name": "bool",
+			"required": true,
+			"schema": {
+			"type": "boolean"
+			}
+		},
+		{
+			"in": "path",
+			"name": "int",
+			"required": true,
+			"schema": {
+			"format": "int32",
+			"type": "number"
+			}
+		},
+		{
+			"in": "path",
+			"name": "float",
+			"required": true,
+			"schema": {
+			"format": "float",
+			"type": "number"
+			}
+		},
+		{
+			"in": "path",
+			"name": "string",
+			"required": true,
+			"schema": {
+			"type": "string"
+			}
+		}
+		]`)
 }
 
-// Operations should fail if there is no public name.
-type SimpleStructWithStructSummaryButNoPublicName struct {
-	Bool   bool
-	Int    int
-	Float  float32
-	String string
+// Operations should succeed if there is a public name and adopt this public name.
+//
+// Note: Warnings expected.
+type SimpleStructWithPublicName struct {
+	Bool   bool    `path:"my_bool"`
+	Int    int     `path:"my_int"`
+	Float  float32 `path:"my_float"`
+	String string  `path:"my_string"`
 }
 
-func (SimpleStructWithStructSummaryButNoPublicName) Summary() string {
-	return "This explains what the operation does"
+func TestParameterWithStructDescriptionAndPublicName(t *testing.T) {
+	sample := SimpleStructWithPublicName{}
+	parameters, err := parameter.FromStruct(reflect.TypeOf(sample), parameter.InPath)
+	assert.NilError(t, err)
+
+	testutils.EqualJSON(t, parameters, `[
+		{
+			"in": "path",
+			"name": "my_bool",
+			"required": true,
+			"schema": {
+			"type": "boolean"
+			}
+		},
+		{
+			"in": "path",
+			"name": "my_int",
+			"required": true,
+			"schema": {
+			"format": "int32",
+			"type": "number"
+			}
+		},
+		{
+			"in": "path",
+			"name": "my_float",
+			"required": true,
+			"schema": {
+			"format": "float",
+			"type": "number"
+			}
+		},
+		{
+			"in": "path",
+			"name": "my_string",
+			"required": true,
+			"schema": {
+			"type": "string"
+			}
+		}
+		]`)
 }
 
-var _ doc.HasSummary = SimpleStructWithStructSummaryButNoPublicName{}
-
-func TestOperationWithStructSummaryButNoPublicName(t *testing.T) {
-	sample := SimpleStructWithStructSummaryButNoPublicName{}
-	_, err := parameter.FromStruct(reflect.TypeOf(sample), parameter.InPath)
-	assert.ErrorContains(t, err, "missing a public name")
+// Operations should succeed if there is a description and adopt this description.
+//
+// No warnings expected.
+type SimpleStructWithDescriptionAndPublicName struct {
+	Bool   bool    `path:"my_bool" description:"Longer description of a bool"`
+	Int    int     `path:"my_int"  description:"Longer description of a int"`
+	Float  float32 `path:"my_float"  description:"Longer description of a float"`
+	String string  `path:"my_string"  description:"Longer description of a string"`
 }
 
-// Operations should fail if there is no field summary.
-
-type SimpleStructWithStructSummaryAndPublicName struct {
-	Bool   bool    `path:"bool"`
-	Int    int     `path:"int"`
-	Float  float32 `path:"float"`
-	String string  `path:"string"`
-}
-
-func (SimpleStructWithStructSummaryAndPublicName) Summary() string {
-	return "This explains what the operation does"
-}
-
-var _ doc.HasSummary = SimpleStructWithStructSummaryAndPublicName{}
-
-func TestOperationWithStructSummaryAndPublicName(t *testing.T) {
-	sample := SimpleStructWithStructSummaryAndPublicName{}
-	_, err := parameter.FromStruct(reflect.TypeOf(sample), parameter.InPath)
-	assert.ErrorContains(t, err, "doesn't have a summary")
-}
-
-// Operations should succeed if everything is present.
-
-type SimpleStructWithSummaryAndPublicName struct {
-	Bool   bool    `path:"bool" summary:"this is a bool"`
-	Int    int     `path:"int"  summary:"this is a int"`
-	Float  float32 `path:"float"  summary:"this is a float"`
-	String string  `path:"string"  summary:"this is a string"`
-}
-
-func (SimpleStructWithSummaryAndPublicName) Summary() string {
-	return "This explains what the operation does"
-}
-
-var _ doc.HasSummary = SimpleStructWithSummaryAndPublicName{}
-
-func TestOperationWithSummaryAndPublicName(t *testing.T) {
-	sample := SimpleStructWithSummaryAndPublicName{}
+func TestParameterWithDescriptionAndPublicName(t *testing.T) {
+	sample := SimpleStructWithDescriptionAndPublicName{}
 	spec, err := parameter.FromStruct(reflect.TypeOf(sample), parameter.InPath)
 
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	testutils.EqualJSON(t, spec, `[{
-			"deprecated": false,
+	testutils.EqualJSON(t, spec, `[
+		{
+			"description": "Longer description of a bool",
 			"in": "path",
-			"name": "bool",
+			"name": "my_bool",
 			"required": true,
 			"schema": {
-			  "schema": {
-				"type":"bool"
-			  }
-			},
-			"summary": "this is a bool"
-        }, {
-			"deprecated": false,
+			"type": "boolean"
+			}
+		},
+		{
+			"description": "Longer description of a int",
 			"in": "path",
-			"name": "int",
+			"name": "my_int",
 			"required": true,
 			"schema": {
-			  "schema": {
-				"type":"number"
-			  }
-			},
-			"summary": "this is a int"
-        }, {
-			"deprecated": false,
+			"format": "int32",
+			"type": "number"
+			}
+		},
+		{
+			"description": "Longer description of a float",
 			"in": "path",
-			"name": "float",
+			"name": "my_float",
 			"required": true,
 			"schema": {
-			  "schema": {
-				"type":"number"
-			  }
-			},
-			"summary": "this is a float"
-        }, {
-			"deprecated": false,
+			"format": "float",
+			"type": "number"
+			}
+		},
+		{
+			"description": "Longer description of a string",
 			"in": "path",
-			"name": "string",
+			"name": "my_string",
 			"required": true,
 			"schema": {
-			  "schema": {
-				"type":"string"
-			  }
-			},
-			"summary": "this is a string"
-        }]`)
+			"type": "string"
+			}
+		}
+		]`)
 }

@@ -1,15 +1,19 @@
 package parameter
 
 import (
+	"encoding/json"
 	"fmt"
+	"log/slog"
 	"reflect"
 
-	tags "github.com/pasqal-io/gousset/inner"
+	"github.com/iancoleman/strcase"
+	"github.com/pasqal-io/gousset/inner/serialization"
+	tags "github.com/pasqal-io/gousset/inner/tags"
 	"github.com/pasqal-io/gousset/openapi/doc"
 	"github.com/pasqal-io/gousset/openapi/example"
 	"github.com/pasqal-io/gousset/openapi/media"
 	"github.com/pasqal-io/gousset/openapi/schema"
-	"github.com/pasqal-io/gousset/openapi/shared"
+	"github.com/pasqal-io/gousset/shared"
 )
 
 type Parameter interface {
@@ -28,20 +32,17 @@ type Spec struct {
 	// The location of the parameter. Possible values are "query", "header", "path" or "cookie".
 	In In `json:"in"`
 
-	// Short summary.
-	Summary string `json:"summary"`
-
-	// Longer description. May include Markdown.
+	// Description. May include Markdown.
 	Description *string `json:"description,omitempty"`
 
-	Required bool `json:"required"`
+	Required bool `json:"required,omitempty"`
 
-	Deprecated bool `json:"deprecated"`
+	Deprecated bool `json:"deprecated,omitempty"`
 
 	// Structure and syntax of the parameter.
 	//
 	// Mutually exclusive with Schema.
-	*ContentSpec `json:"content,omitempty"`
+	*ContentSpec `json:"content,omitempty" flatten:""`
 
 	// Media type and schema for the parameter.
 	//
@@ -49,28 +50,47 @@ type Spec struct {
 	*SchemaSpec `json:"schema,omitempty"`
 }
 
-func FromField(from reflect.StructField, in In) (Spec, error) {
+func (s Spec) MarshalJSON() ([]byte, error) {
+	flattened, err := serialization.FlattenStructToJSON(s)
+	if err != nil {
+		return []byte{}, fmt.Errorf("error while flattening Spec for serialization: %w, ", err)
+	}
+	return json.Marshal(flattened)
+}
+
+func FromField(container reflect.Type, from reflect.StructField, in In) (Spec, error) {
 	publicNameKey := string(in)
 	tags, err := tags.Parse(from.Tag)
 	if err != nil {
-		return Spec{}, fmt.Errorf("failed to parse tags for field %s, got %w", from.Name, err)
+		return Spec{}, fmt.Errorf("while compiling individual parameter from field %s.%s, failed to parse tags: %w", container.String(), from.Name, err)
 	}
 
-	// We make the decision of only documenting fields that have a public field name.
-	tagFieldName := tags.PublicFieldName(publicNameKey)
-	if tagFieldName == nil {
-		return Spec{}, fmt.Errorf("field %s is missing a public name", from.Name)
+	// If a public name exists, use it.
+	publicFieldName := tags.PublicFieldName(publicNameKey)
+	if publicFieldName == nil {
+		if publicNameKey == "path" || publicNameKey == "query" {
+			publicFieldName = shared.Ptr(strcase.ToSnake(from.Name))
+		} else {
+			publicFieldName = shared.Ptr(strcase.ToLowerCamel(from.Name))
+		}
+		slog.Warn("gousset.openapi.parameter.FromField: field is missing a tag with a public name, falling back to default",
+			"struct", container.String(),
+			"field", from.Name,
+			"origin", in,
+			"missing_tag", publicNameKey,
+			"default", *publicFieldName)
 	}
 
 	// Extract summary and description.
-	summary := doc.GetSummary(from.Type)
 	description := doc.GetDescription(from.Type)
 
-	if summary == nil {
-		if tagSummary, ok := tags.Lookup("summary"); ok && len(tagSummary) >= 1 {
-			summary = shared.Ptr(tagSummary[0])
+	if description == nil {
+		if tagSummary, ok := tags.Lookup("description"); ok && len(tagSummary) >= 1 {
+			description = shared.Ptr(tagSummary[0])
 		} else {
-			return Spec{}, fmt.Errorf("field %s doesn't have a summary, please provide a method Summary() or a tag `summary`", from.Name)
+			slog.Warn("gousset.openapi.parameter.FromField: field is missing a description, please add a tag `description` to the field or a method `Description()` to its type",
+				"struct", container.String(),
+				"field", from.Name)
 		}
 	}
 
@@ -84,9 +104,9 @@ func FromField(from reflect.StructField, in In) (Spec, error) {
 		required = false
 	}
 
-	schema, err := schema.FromType(from.Type, publicNameKey)
+	schema, err := schema.FromImplementation(schema.Implementation{Type: from.Type, PublicNameKey: publicNameKey})
 	if err != nil {
-		return Spec{}, fmt.Errorf("failed to find schema for field %s: %w", from.Name, err)
+		return Spec{}, fmt.Errorf("while compiling individual parameter from field %s.%s, failed to find schema for field: %w", container.String(), from.Name, err)
 	}
 	schemaSpec := SchemaSpec{
 		Style:   nil,
@@ -95,9 +115,8 @@ func FromField(from reflect.StructField, in In) (Spec, error) {
 	}
 
 	return Spec{
-		Name:        *tagFieldName, // Non-nil, checked above.
+		Name:        *publicFieldName, // Non-nil, checked above.
 		In:          in,
-		Summary:     *summary, // Non-nil, checked above.
 		Description: description,
 		Deprecated:  deprecated,
 		Required:    required,
@@ -107,16 +126,16 @@ func FromField(from reflect.StructField, in In) (Spec, error) {
 
 func FromStruct(Struct reflect.Type, in In) ([]Parameter, error) {
 	if Struct.Kind() != reflect.Struct {
-		return []Parameter{}, fmt.Errorf("invalid type %s, expected a struct, got %v.", Struct.String(), Struct.Kind())
+		return []Parameter{}, fmt.Errorf("while attempting to compile parameter list from struct, invalid type %s, expected a struct, got %v.", Struct.String(), Struct.Kind())
 	}
 
 	var parameters []Parameter
 	for i := 0; i < Struct.NumField(); i++ { // We have checked above that it's a struct.
 		field := Struct.Field(i)
 		// FIXME: We'll need to know if there are any default values.
-		param, err := FromField(field, in)
+		param, err := FromField(Struct, field, in) // FIXME: This fails if the field is flattened!
 		if err != nil {
-			return []Parameter{}, fmt.Errorf("failed to generate spec for parameter %s of type %s: %w", field.Name, Struct.String(), err)
+			return []Parameter{}, fmt.Errorf("while attempting to compile parameter list from struct, failed to generate spec for parameter %s of type %s: %w", field.Name, Struct.String(), err)
 		}
 		parameters = append(parameters, param)
 	}
@@ -150,16 +169,24 @@ func (Reference) parameter() {
 var _ Parameter = Reference{}
 
 type SchemaSpec struct {
+	schema.Schema `flatten:""`
+
 	// Describes how the parameter value will be serialized depending on the type of the parameter value. Default values (based on value of in): for "query" - "form"; for "path" - "simple"; for "header" - "simple"; for "cookie" - "form".
 	Style *string `json:"style,omitempty"`
 
 	// When this is true, parameter values of type array or object generate separate parameters for each value of the array or key-value pair of the map. For other types of parameters this field has no effect. When style is "form", the default value is true. For all other styles, the default value is false. Note that despite false being the default for deepObject, the combination of false with deepObject is undefined.
 	Explode *bool `json:"explode,omitempty"`
 
-	Schema schema.Schema `json:"schema"`
-
 	Example  *shared.Json       `json:"example,omitempty"`
 	Examples *[]example.Example `json:"examples,omitempty"`
+}
+
+func (s SchemaSpec) MarshalJSON() ([]byte, error) {
+	flattened, err := serialization.FlattenStructToJSON(s)
+	if err != nil {
+		return []byte{}, fmt.Errorf("error while flattening SchemaSpec for serialization: %w, ", err)
+	}
+	return json.Marshal(flattened)
 }
 
 type ContentSpec struct {

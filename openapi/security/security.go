@@ -1,5 +1,7 @@
 package security
 
+import "github.com/pasqal-io/gousset/shared"
+
 // A list of security requirements for an endpoint.
 //
 // Each name MUST correspond to a security scheme which is declared in the Security Schemes under the Components Object. If the security scheme is of type "oauth2" or "openIdConnect", then the value is a list of scope names required for the execution, and the list MAY be empty if authorization does not require a specified scope. For other security scheme types, the array MAY contain a list of role names which are required for the execution, but are not otherwise defined or exchanged in-band.
@@ -10,16 +12,13 @@ type Scheme interface {
 	sealed()
 }
 
-// A reference to a security scheme defined in Components.
-type Reference struct {
-	Ref string `json:"$ref"`
-}
+// A reference to a Component.
+type Reference shared.Reference
 
 func Ref(to string) Reference {
-	return Reference{
-		Ref: to,
-	}
+	return Reference(shared.Ref(to))
 }
+
 func (Reference) sealed() {}
 
 var _ Scheme = Ref("")
@@ -29,24 +28,25 @@ type Spec struct {
 	// The type of security, e.g. oauth2.
 	Type Type `json:"type"`
 
-	// The name of the header, query or cookie parameter used.
-	Name string `json:"name"`
-
 	// A human readable description. May contain markdown.
-	Description *string `json:"description,omitempty"`
+	Description *string `json:"description,omitempty" exhaustruct:"optional"`
 
 	// Poor man's sum type. Provided iff Type is TypeAPIKey.
-	*ApiKey
+	*ApiKey `exhaustruct:"optional"`
 
 	// Poor man's sum type. Provided iff Type is TypeHttp.
-	*Http
+	*Http `exhaustruct:"optional"`
 
 	// Poor man's sum type. Provided iff Type is TypeOAuth2.
-	*Oauth2
+	Flows *OAuthFlows `json:"flows" exhaustruct:"optional"`
 
 	// Poor man's sum type. Provided iff Type is TypeOpenIdConnect.
-	*OpenIdConnect
+	*OpenIdConnect `exhaustruct:"optional"`
 }
+
+func (Spec) sealed() {}
+
+var _ Scheme = Spec{}
 
 // A type of security.
 type Type string
@@ -81,26 +81,22 @@ type Http struct {
 	BearerFormat *string `json:"bearerFormat"`
 }
 
-type Oauth2 struct {
-	Flows OAuthFlows `json:"flows"`
-}
-
 type OpenIdConnect struct {
 	OpenIdConnectUrl string `json:"openIdConnectUrl"`
 }
 
 type OAuthFlows struct {
 	// Configuration for the OAuth implicit flow.
-	Implicit *OAuthFlow `json:"implicit,omitempty"`
+	Implicit *OAuthFlow `json:"implicit,omitempty" exhaustruct:"optional"`
 
 	// Configuration for the OAuth password flow.
-	Password *OAuthFlow `json:"password,omitempty"`
+	Password *OAuthFlow `json:"password,omitempty" exhaustruct:"optional"`
 
 	// Configuration for the OAuth client credentials (aka "application") flow.
-	ClientCredentials *OAuthFlow `json:"clientCredentials,omitempty"`
+	ClientCredentials *OAuthFlow `json:"clientCredentials,omitempty" exhaustruct:"optional"`
 
 	// Configuration for the OAuth authorization code (aka "accesCode") flow.
-	AuthorizationCode *OAuthFlow `json:"authorizationCode,omitempty"`
+	AuthorizationCode *OAuthFlow `json:"authorizationCode,omitempty" exhaustruct:"optional"`
 }
 
 type OAuthFlow struct {
