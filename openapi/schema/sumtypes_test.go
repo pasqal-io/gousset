@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/pasqal-io/gousset/openapi/schema"
-	"github.com/pasqal-io/gousset/testutils"
+	"github.com/pasqal-io/gousset/shared"
 )
 
 // -----   Example: Using sum types.
@@ -54,40 +54,57 @@ func TestFlattened(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	testutils.EqualJSON(t, spec, `{
-		"oneOf": [
-			{
-				"type": "object",
-				"required": [
+	// Note: we cannot test with testutils.EqualJSON because the
+	// order of fields in `Required` changes across runs.
+	err = schema.EqualSchema(spec, schema.OneOf{
+		OneOf: []schema.Schema{
+			schema.Object{
+				Shared: schema.Shared{
+					Type: schema.TypeObject,
+				},
+				Required: []string{
 					"comments",
-					"success"
-				],
-				"properties": {
-					"comments": {
-						"type": "string"
+					"success",
+				},
+				Properties: map[string]schema.Schema{
+					"comments": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeString,
+						},
 					},
-					"success": {
-						"type": "string"
-					}
-				}
+					"success": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeString,
+						},
+					},
+				},
 			},
-			{
-				"type": "object",
-				"required": [
+			schema.Object{
+				Shared: schema.Shared{
+					Type: schema.TypeObject,
+				},
+				Required: []string{
 					"comments",
-					"failure"
-				],
-				"properties": {
-					"comments": {
-						"type": "string"
+					"failure",
+				},
+				Properties: map[string]schema.Schema{
+					"comments": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeString,
+						},
 					},
-					"failure": {
-						"type": "boolean"
-					}
-				}
-			}
-		]
-		}`)
+					"failure": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeBool,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestMoreFlattened(t *testing.T) {
@@ -104,38 +121,112 @@ func TestMoreFlattened(t *testing.T) {
 	if err != nil {
 		panic(err)
 	}
-	testutils.EqualJSON(t, spec, `{
-		"oneOf": [
-			{
-			"type": "object",
-			"required": [
-				"comments",
-				"result"
-			],
-			"properties": {
-				"comments": {
-					"type": "string"
+
+	// Note: we cannot test with testutils.EqualJSON because the
+	// order of fields in `Required` changes across runs.
+	err = schema.EqualSchema(spec, schema.OneOf{
+		OneOf: []schema.Schema{
+			schema.Object{
+				Shared: schema.Shared{
+					Type: schema.TypeObject,
 				},
-				"result": {
-					"type": "string"
-				}
-			}
+				Required: []string{
+					"comments",
+					"result",
+				},
+				Properties: map[string]schema.Schema{
+					"comments": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeString,
+						},
+					},
+					"result": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeString,
+						},
+					},
+				},
 			},
-			{
-			"type": "object",
-			"required": [
-				"comments",
-				"result"
-			],
-			"properties": {
-				"comments": {
-					"type": "string"
+			schema.Object{
+				Shared: schema.Shared{
+					Type: schema.TypeObject,
 				},
-				"result": {
-					"type": "boolean"
-				}
-			}
-			}
-		]
-		}`)
+				Required: []string{
+					"comments",
+					"result",
+				},
+				Properties: map[string]schema.Schema{
+					"comments": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeString,
+						},
+					},
+					"result": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeBool,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFullyFlattened(t *testing.T) {
+	type Int struct {
+		Field int `json:"field"`
+	}
+	type String struct {
+		Field string `json:"field"`
+	}
+	type Sum struct {
+		*Int    `variant:"int" flatten:""`
+		*String `variant:"string" flatten:""`
+	}
+	spec, err := schema.FromImplementation(schema.Implementation{
+		Type:          reflect.TypeFor[Sum](),
+		PublicNameKey: "json",
+	})
+	if err != nil {
+		panic(err)
+	}
+	// Note: we cannot test with testutils.EqualJSON because the
+	// order of fields in `Required` changes across runs.
+	err = schema.EqualSchema(spec, schema.OneOf{
+		OneOf: []schema.Schema{
+			schema.Object{
+				Shared: schema.Shared{
+					Type: schema.TypeObject,
+				},
+				Required: []string{"field"},
+				Properties: map[string]schema.Schema{
+					"field": schema.Primitive{
+						Shared: schema.Shared{
+							Type:   schema.TypeNumber,
+							Format: shared.Ptr(string(schema.FormatInt32)),
+						},
+					},
+				},
+			},
+			schema.Object{
+				Shared: schema.Shared{
+					Type: schema.TypeObject,
+				},
+				Required: []string{"field"},
+				Properties: map[string]schema.Schema{
+					"field": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeString,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }

@@ -6,10 +6,13 @@
 package schema
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
 	"reflect"
+	"slices"
 	"time"
 
 	"github.com/pasqal-io/gousset/inner/tags"
@@ -296,7 +299,7 @@ func fromImplementationSingleVariant(impl Implementation, restriction map[string
 					return errorReturn, fmt.Errorf("while compiling schema for struct %s, failed to parse tags for field %s", impl.Type.String(), field.Name)
 				}
 
-				if tags.IsFlattened() {
+				if tags.IsFlattened() || field.Anonymous {
 					// Copy fields/entries from this type into the parent.
 					typ := field.Type
 					for typ.Kind() == reflect.Pointer {
@@ -426,7 +429,7 @@ func FromImplementation(impl Implementation) (Schema, error) {
 		return fromImplementationSingleVariant(impl, nil)
 	case 1:
 		var key string
-		for k, _ := range variants {
+		for k := range variants {
 			key = k
 			break
 		}
@@ -625,4 +628,166 @@ type HasMin interface {
 // Implement this to mark a maximal value for a number.
 type HasMax interface {
 	Max() float64
+}
+
+func castBoth[T any](left Schema, right Schema) (*T, *T, bool, error) {
+	leftAs, ok := left.(T)
+	if !ok {
+		return nil, nil, false, nil
+	}
+	rightAs, ok := right.(T)
+	if !ok {
+		return nil, nil, false, fmt.Errorf("cast error: cast left to %s, right is %v",
+			reflect.TypeFor[T]().String(),
+			right)
+	}
+	return &leftAs, &rightAs, true, nil
+}
+
+func EqualSchema(left Schema, right Schema) error {
+	{
+		castLeft, castRight, ok, err := castBoth[Primitive](left, right)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return EqualPrimitive(*castLeft, *castRight)
+		}
+	}
+	{
+		castLeft, castRight, ok, err := castBoth[Object](left, right)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return EqualObject(*castLeft, *castRight)
+		}
+	}
+	{
+		castLeft, castRight, ok, err := castBoth[OneOf](left, right)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return EqualOneOf(*castLeft, *castRight)
+		}
+	}
+	{
+		castLeft, castRight, ok, err := castBoth[Array](left, right)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return EqualArray(*castLeft, *castRight)
+		}
+	}
+	panic(fmt.Errorf("equality for this type is not implemented yet: %s", reflect.TypeOf(left).String()))
+}
+
+func EqualShared(left Shared, right Shared) error {
+	leftJson, err := json.MarshalIndent(left, "", "\t")
+	if err != nil {
+		panic(fmt.Errorf("cannot check left shared: %w", err))
+	}
+	rightJson, err := json.MarshalIndent(right, "", "\t")
+	if err != nil {
+		panic(fmt.Errorf("cannot check right shared: %w", err))
+	}
+	if string(leftJson) != string(rightJson) {
+		return fmt.Errorf("distinct shared: %s != %s", string(leftJson), string(rightJson))
+	}
+	return nil
+}
+
+func EqualArray(left Array, right Array) error {
+	err := EqualShared(left.Shared, right.Shared)
+	if err != nil {
+		return fmt.Errorf("distinct arrays (shared): %w", err)
+	}
+	return EqualSchema(left.Items, right.Items)
+}
+
+func EqualObject(left Object, right Object) error {
+	err := EqualShared(left.Shared, right.Shared)
+	if err != nil {
+		return fmt.Errorf("distinct objects (shared), %v != %v, %w", left, right, err)
+	}
+	// `required`
+	leftRequired := left.Required
+	rightRequired := right.Required
+	slices.Sort(leftRequired)
+	slices.Sort(rightRequired)
+	if len(leftRequired) != len(rightRequired) {
+		return fmt.Errorf("distinct `required`: %v != %v", leftRequired, rightRequired)
+	}
+	for i := range leftRequired {
+		if leftRequired[i] != rightRequired[i] {
+			return fmt.Errorf("distinct `required[%d]`: %v != %v", i, leftRequired, rightRequired)
+		}
+	}
+	// `additionalProperties`
+	if left.AdditionalProperties == nil && right.AdditionalProperties == nil {
+		// We're good.
+	} else if left.AdditionalProperties != nil && right.AdditionalProperties != nil {
+		err := EqualSchema(*left.AdditionalProperties, *right.AdditionalProperties)
+		if err != nil {
+			return err
+		}
+	} else {
+		return errors.New("distinct additional properties")
+	}
+	// `properties`
+	if len(left.Properties) != len(right.Properties) {
+		return fmt.Errorf("distinct `required`: %v != %v", maps.Keys(left.Properties), maps.Keys(right.Properties))
+	}
+	for k := range left.Properties {
+		leftSchema := left.Properties[k]
+		rightSchema := right.Properties[k]
+		err := EqualSchema(leftSchema, rightSchema)
+		if err != nil {
+			return fmt.Errorf("while inspecting key %s, distinct schemas: %w", k, err)
+		}
+	}
+	return nil
+}
+
+func EqualPrimitive(left Primitive, right Primitive) error {
+	leftJson, err := json.MarshalIndent(left, "", "\t")
+	if err != nil {
+		panic(fmt.Errorf("failed to serialize left %v: %w", left, err))
+	}
+	rightJson, err := json.MarshalIndent(right, "", "\t")
+	if err != nil {
+		panic(fmt.Errorf("failed to serialize left %v: %w", right, err))
+	}
+	if string(leftJson) == string(rightJson) {
+		return nil
+	}
+	return fmt.Errorf("%s != %s", string(leftJson), string(rightJson))
+}
+
+func EqualOneOf(left OneOf, right OneOf) error {
+	if len(left.OneOf) != len(right.OneOf) {
+		return fmt.Errorf("invalid number of variants, expected %d, got %d", len(right.OneOf), len(left.OneOf))
+	}
+	leftSchemas := slices.Clone(left.OneOf)
+	rightSchemas := slices.Clone(right.OneOf)
+	for _, fromLeft := range leftSchemas {
+		found := false
+		newRight := []Schema{}
+		for _, fromRight := range rightSchemas {
+			err := EqualSchema(fromLeft, fromRight)
+			if err == nil {
+				found = true
+				// Remove this schema from the list of schemas to test.
+			} else {
+				newRight = append(newRight, fromRight)
+			}
+		}
+		rightSchemas = newRight
+		if !found {
+			return fmt.Errorf("could not find %v among %v.", fromLeft, rightSchemas)
+		}
+	}
+	return nil
 }

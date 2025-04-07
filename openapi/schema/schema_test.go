@@ -133,62 +133,78 @@ type ComplexStruct struct {
 
 func TestComplexStruc(t *testing.T) {
 	sample := ComplexStruct{}
-	result, err := schema.FromImplementation(schema.Implementation{Type: reflect.TypeOf(sample), PublicNameKey: "json"})
+	spec, err := schema.FromImplementation(schema.Implementation{Type: reflect.TypeOf(sample), PublicNameKey: "json"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	testutils.EqualJSON(t, result, `{
-		"type": "object",
-		"required": [
-			"booleans",
+	// Note: we cannot test with testutils.EqualJSON because the
+	// order of fields in `Required` changes across runs.
+	object := schema.Object{
+		Shared: schema.Shared{
+			Type: schema.TypeObject,
+		},
+		Required: []string{
+			"foo", "bar",
+		},
+		Properties: map[string]schema.Schema{
+			"foo": schema.Primitive{
+				Shared: schema.Shared{
+					Type: schema.TypeString,
+				},
+			},
+			"bar": schema.Primitive{
+				Shared: schema.Shared{
+					Type: schema.TypeString,
+				},
+			},
+		},
+	}
+	var object_schema schema.Schema = object
+	err = schema.EqualSchema(spec, schema.Object{
+		Shared: schema.Shared{
+			Type: schema.TypeObject,
+		},
+		Required: []string{"booleans",
 			"outline",
-			"string_map"
-		],
-		"properties": {
-			"booleans": {
-			"type": "array",
-			"items": {
-				"externalDocs": {
-				"description": "Look, there's something interesting over there",
-				"url": "http://www.example.org"
+			"string_map",
+			"foo",
+			"bar",
+		},
+		Properties: map[string]schema.Schema{
+			"booleans": schema.Array{
+				Shared: schema.Shared{
+					Type: schema.TypeArray,
 				},
-				"type": "boolean"
-			}
-			},
-			"outline": {
-			"type": "object",
-			"required": [
-				"foo",
-				"bar"
-			],
-			"properties": {
-				"bar": {
-				"type": "string"
-				},
-				"foo": {
-				"type": "string"
-				}
-			}
-			},
-			"string_map": {
-			"type": "object",
-			"additionalProperties": {
-				"type": "object",
-				"required": [
-					"foo",
-					"bar"
-				],
-				"properties": {
-					"bar": {
-					"type": "string"
+				Items: schema.Primitive{
+					Shared: schema.Shared{
+						Type: schema.TypeBool,
+						ExternalDocs: &doc.External{
+							Description: "Look, there's something interesting over there",
+							Url:         "http://www.example.org",
+						},
 					},
-					"foo": {
-					"type": "string"
-					}
-				}
-			}
-			}
-		}
-	}`)
-
+				},
+			},
+			"outline": object,
+			"string_map": schema.Object{
+				Shared: schema.Shared{
+					Type: schema.TypeObject,
+				},
+				AdditionalProperties: &object_schema,
+			},
+			"foo": schema.Primitive{
+				Shared: schema.Shared{
+					Type: schema.TypeString,
+				},
+			},
+			"bar": schema.Primitive{
+				Shared: schema.Shared{
+					Type: schema.TypeString,
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
