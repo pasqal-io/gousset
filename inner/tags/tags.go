@@ -256,3 +256,7 @@ func (tags Tags) LookupInt(key string) (*int64, error) {
 func (tags Tags) Example() *string {
 	return tags.LookupString("example")
 }
+
+func (tags Tags) Variants() ([]string, bool) {
+	return tags.Lookup("variant")
+}

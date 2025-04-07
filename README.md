@@ -143,5 +143,43 @@ Use `maxProperties:"number"`, `minProperties:"number"` to restrict the number of
 
 You can also customize entire types.
 
-See all the interfaces in `hooks` to see how to document entire types, including the complex
-case of sum types.
+### Sum types
+
+Sum types (e.g. `int | string`) are very different between Go and OpenSpec.
+
+In Go, se represent the sum type as a `struct`, e.g.
+
+```go
+type MyFooOrBar struct {
+    Foo* Foo `variant:"variant_1" json:"foo"`
+    Bar* Bar `variant:"variant_2" json:"bar"`
+}
+```
+
+This will be compiled as if we had defined
+
+```ts
+type MyFooOrBar = {Foo* Foo} | {Bar* Bar}
+```
+
+Alternatively, you can request flattening
+
+```go
+type MyFooOrBar struct {
+    Foo* Foo `variant:"variant_1" json:"foo" flatten:""`
+    Bar* Bar `variant:"variant_2" json:"bar"  flatten:""`
+}
+```
+
+This will be compiled as if we had defined
+
+```ts
+type MyFooOrBar = Foo | Bar
+```
+
+As of this writing, this mechanism only works if `Foo` or `Bar` are `struct`. If you
+need it to work with other types, don't hesitate to file an issue!
+
+### Min, max, pattern, length, ...
+
+See all the interfaces in `hooks` to see how to document entire types.

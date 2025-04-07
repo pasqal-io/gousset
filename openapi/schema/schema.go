@@ -6,15 +6,19 @@
 package schema
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
+	"maps"
 	"reflect"
+	"slices"
 	"time"
 
 	"github.com/pasqal-io/gousset/inner/tags"
 	"github.com/pasqal-io/gousset/openapi/doc"
 	"github.com/pasqal-io/gousset/openapi/example"
 	"github.com/pasqal-io/gousset/shared"
-	"github.com/pasqal-io/gousset/shared/structs"
 )
 
 // A JSON schema.
@@ -141,25 +145,6 @@ type Implementation struct {
 
 var stringType = reflect.TypeOf("")
 
-func fromIsOneOf(impl Implementation, types []reflect.Type) (Schema, error) {
-	result := OneOf{}
-	for _, typ := range types {
-		spec, err := FromImplementation(Implementation{
-			Type:          typ,
-			PublicNameKey: impl.PublicNameKey,
-		})
-		if err != nil {
-			return OneOf{}, fmt.Errorf("while compiling schema for sum type %s, error dealing with case %s: %w",
-				impl.Type.String(),
-				typ.String(),
-				err,
-			)
-		}
-		result.OneOf = append(result.OneOf, spec)
-	}
-	return result, nil
-}
-
 func fill[T any, I any](field **T, value any, cb func(I) T) {
 	if *field != nil {
 		return
@@ -171,15 +156,10 @@ func fill[T any, I any](field **T, value any, cb func(I) T) {
 	*field = shared.Ptr(cb(asInterface))
 }
 
-// Create a schema from a type.
+// Extract the scheme for a single variant.
 //
-// As of this writing, we make no attempt to optimize schemas if e.g. some data structures are repeated.
-//
-// Arguments:
-//
-//   - typ The type to extract. See HasSchema, HasExternalDocs, HasExample for means to configure it.
-//   - publicNameKey The tag used to represent the public name of this field, e.g. `json`, `query`, `path`.
-func FromImplementation(impl Implementation) (Schema, error) {
+// If `restriction` is not nil, only consider the fields that are keys of `restriction`.
+func fromImplementationSingleVariant(impl Implementation, restriction map[string]bool) (Schema, error) {
 	errorReturn := AllOf{}
 	share := Shared{
 		Title:            impl.Title,
@@ -197,9 +177,6 @@ func FromImplementation(impl Implementation) (Schema, error) {
 		MinProperties:    impl.MinProperties,
 		Enum:             impl.Enum,
 		Format:           impl.Format,
-	}
-	if isOneOf, ok := registerOneOf[impl.Type]; ok {
-		return fromIsOneOf(impl, isOneOf)
 	}
 	phony := reflect.New(impl.Type)
 	if phony.CanInterface() {
@@ -302,64 +279,80 @@ func FromImplementation(impl Implementation) (Schema, error) {
 		patternProperties := make(map[string]Schema)
 		var fields []reflect.StructField
 		for i := 0; i < impl.Type.NumField(); i++ {
-			fields = append(fields, impl.Type.Field(i))
-		}
-		for _, field := range fields {
-			if !field.IsExported() {
-				continue
-			}
-			tags, err := tags.Parse(field.Tag)
-			if err != nil {
-				return errorReturn, fmt.Errorf("while compiling schema for struct %s, failed to parse tags for field %s", impl.Type.String(), field.Name)
-			}
-
-			if tags.IsFlattened() {
-				switch field.Type.Kind() {
-				case reflect.Struct:
-					for i := 0; i < field.Type.NumField(); i++ {
-						fields = append(fields, field.Type.Field(i))
-					}
+			field := impl.Type.Field(i)
+			if restriction != nil {
+				if _, ok := restriction[field.Name]; !ok {
 					continue
-				case reflect.Map:
-					subImpl := impl
-					subImpl.Type = field.Type.Elem()
-					switch field.Type.Key().Kind() {
-					case reflect.String:
-						scheme, err := FromImplementation(subImpl)
-						if err != nil {
-							return errorReturn, fmt.Errorf("while compiling schema for struct %s, cannot extract scheme for contents of map at field %s: %w", impl.Type.String(), field.Name, err)
-						}
-						patternProperties["*"] = scheme
-						continue
-					default:
-						return errorReturn, fmt.Errorf("while compiling schema for %s, this type of map is not implemented at field %s", impl.Type.String(), field.Name)
-					}
-				default:
-					return errorReturn, fmt.Errorf("while compiling schema for %s, field %s is marked as flattened but is not a struct", impl.Type.String(), field.Name)
 				}
 			}
+			fields = append(fields, field)
+		}
+		for len(fields) != 0 {
+			currentFields := fields
+			fields = []reflect.StructField{}
+			for _, field := range currentFields {
+				if !field.IsExported() {
+					continue
+				}
+				tags, err := tags.Parse(field.Tag)
+				if err != nil {
+					return errorReturn, fmt.Errorf("while compiling schema for struct %s, failed to parse tags for field %s", impl.Type.String(), field.Name)
+				}
 
-			var name string
-			if publicName := tags.PublicFieldName(impl.PublicNameKey); publicName != nil {
-				name = *publicName
-			} else {
-				return errorReturn, fmt.Errorf("while compiling schema for struct %s, field %s doesn't have a public name, expecting a tag `%s`", impl.Type.String(), field.Name, impl.PublicNameKey)
-			}
+				if tags.IsFlattened() || field.Anonymous {
+					// Copy fields/entries from this type into the parent.
+					typ := field.Type
+					for typ.Kind() == reflect.Pointer {
+						typ = typ.Elem()
+					}
+					switch typ.Kind() {
+					case reflect.Struct:
+						// Let's do it again, but with children fields instead of this field.
+						for i := 0; i < typ.NumField(); i++ {
+							fields = append(fields, typ.Field(i))
+						}
+						continue
+					case reflect.Map:
+						subImpl := impl
+						subImpl.Type = typ.Elem()
+						switch typ.Key().Kind() {
+						case reflect.String:
+							scheme, err := FromImplementation(subImpl)
+							if err != nil {
+								return errorReturn, fmt.Errorf("while compiling schema for struct %s, cannot extract scheme for contents of map at field %s: %w", impl.Type.String(), field.Name, err)
+							}
+							patternProperties["*"] = scheme
+						default:
+							return errorReturn, fmt.Errorf("while compiling schema for %s, this type of map is not implemented at field %s", impl.Type.String(), field.Name)
+						}
+					default:
+						return errorReturn, fmt.Errorf("while compiling schema for %s, field %s is marked as flattened but is not a struct, got %s", impl.Type.String(), field.Name, field.Type.String())
+					}
+				} else {
+					// Treat field as an object.
+					var name string
+					if publicName := tags.PublicFieldName(impl.PublicNameKey); publicName != nil {
+						name = *publicName
+					} else {
+						return errorReturn, fmt.Errorf("while compiling schema for struct %s, field %s doesn't have a public name, expecting a tag `%s`", impl.Type.String(), field.Name, impl.PublicNameKey)
+					}
 
-			subImpl, err := ImplementationFromStructField(field, impl.PublicNameKey)
-			if err != nil {
-				return errorReturn, fmt.Errorf("while compiling a schema for struct %s, error in field %s: %w", impl.Type.String(), field.Name, err)
-			}
+					subImpl, err := ImplementationFromStructField(field, impl.PublicNameKey)
+					if err != nil {
+						return errorReturn, fmt.Errorf("while compiling a schema for struct %s, error in field %s: %w", impl.Type.String(), field.Name, err)
+					}
 
-			fieldSchema, err := FromImplementation(subImpl)
-			if err != nil {
-				return errorReturn, fmt.Errorf("while compiling schema for %s, failed to extract scheme from field %s: %w", impl.Type.String(), field.Name, err)
-			}
+					fieldSchema, err := FromImplementation(subImpl)
+					if err != nil {
+						return errorReturn, fmt.Errorf("while compiling schema for %s, failed to extract scheme from field %s: %w", impl.Type.String(), field.Name, err)
+					}
 
-			if tags.Default() == nil && !tags.IsPreinitialized() && tags.MethodName() == nil {
-				required = append(required, name)
+					if tags.Default() == nil && !tags.IsPreinitialized() && tags.MethodName() == nil {
+						required = append(required, name)
+					}
+					properties[name] = fieldSchema
+				}
 			}
-			properties[name] = fieldSchema
 		}
 		share.Type = TypeObject
 		return Object{
@@ -393,6 +386,84 @@ func FromImplementation(impl Implementation) (Schema, error) {
 	return Primitive{
 		Shared: share,
 	}, nil
+}
+
+// Create a schema from a type.
+//
+// As of this writing, we make no attempt to optimize schemas if e.g. some data structures are repeated.
+func FromImplementation(impl Implementation) (Schema, error) {
+	if impl.Type.Kind() != reflect.Struct {
+		return fromImplementationSingleVariant(impl, nil)
+	}
+	// Make a first pass to determine whether this is a sum type.
+	shared := []string{}
+	variants := map[string][]string{}
+	for i := 0; i < impl.Type.NumField(); i++ {
+		field := impl.Type.Field(i)
+		tags, err := tags.Parse(field.Tag)
+		if err != nil {
+			return OneOf{}, fmt.Errorf("while compiling schema for struct type %s, during the first pass, error while parsing tags for field %s: %w",
+				impl.Type.String(),
+				field.Name,
+				err)
+		}
+		if fieldVariants, ok := tags.Variants(); ok {
+			// This field belongs to at least one variant (which means that there are variants).
+			for _, variant := range fieldVariants {
+				var addMeTo []string
+				if v, found := variants[variant]; found {
+					addMeTo = v
+				} else {
+					addMeTo = []string{}
+				}
+				variants[variant] = append(addMeTo, field.Name)
+			}
+		} else {
+			// This field belongs to all variants (which might mean that there are no variants).
+			shared = append(shared, field.Name)
+		}
+	}
+	switch len(variants) {
+	case 0:
+		// No variants, just a regular struct.
+		return fromImplementationSingleVariant(impl, nil)
+	case 1:
+		var key string
+		for k := range variants {
+			key = k
+			break
+		}
+		slog.Warn("gousset.openapi.schema.FromImplementation: encountering a struct with a single variant, tag `variants` seems misapplied",
+			"type", impl.Type.String(),
+			"variant", key)
+		return fromImplementationSingleVariant(impl, nil)
+	default:
+		// Alright, this is a true sum type, let's build it.
+		result := OneOf{}
+
+		// Order the variant names by a guaranteed stable order.
+		// This is mostly to make testing easier.
+		variantNames := []string{}
+		for variantName := range maps.Keys(variants) {
+			variantNames = append(variantNames, variantName)
+		}
+
+		for _, variantName := range variantNames {
+			restriction := map[string]bool{}
+			for _, name := range variants[variantName] {
+				restriction[name] = true
+			}
+			for _, name := range shared {
+				restriction[name] = true
+			}
+			variant, err := fromImplementationSingleVariant(impl, restriction)
+			if err != nil {
+				return AllOf{}, fmt.Errorf("while compiling schema for sum type %s, error in variant %s: %w", impl.Type.String(), variantName, err)
+			}
+			result.OneOf = append(result.OneOf, variant)
+		}
+		return result, nil
+	}
 }
 
 func ImplementationFromStructField(field reflect.StructField, publicNameKey string) (Implementation, error) {
@@ -491,35 +562,6 @@ const (
 	FormatPassword    = Format("password")
 )
 
-// Implement this to represent a value that can come from several well-known
-// types.
-//
-// If you implement this interface, you MUST call RegisterOneOf.
-//
-// See [sumtypes_test.go] for a complete example.
-type IsOneOf interface {
-	// The main interface (for instance, for a MySum = MyString | MyInt, this should be MySum).
-	Type() reflect.Type
-
-	// Each of the possible variants (for instance, for a MySum = MyString | MyInt, this should be MyString and MySum).
-	Variants() []reflect.Type
-}
-
-// Register a OneOf type.
-//
-// Note: In other languages, this would be a static method of IsOneOf, but
-// there are no such things in Go.
-func RegisterOneOf[T IsOneOf](value T) structs.Nothing {
-	typ := value.Type()
-	if typ.Kind() != reflect.Interface {
-		panic(fmt.Errorf("IsOneOf.Type() MUST return an interface, got %s", typ.String()))
-	}
-	registerOneOf[typ] = value.Variants()
-	return structs.Nothing{}
-}
-
-var registerOneOf = map[reflect.Type][]reflect.Type{}
-
 func isTime(value any) bool {
 	if _, ok := value.(time.Time); ok {
 		return true
@@ -586,4 +628,166 @@ type HasMin interface {
 // Implement this to mark a maximal value for a number.
 type HasMax interface {
 	Max() float64
+}
+
+func castBoth[T any](left Schema, right Schema) (*T, *T, bool, error) {
+	leftAs, ok := left.(T)
+	if !ok {
+		return nil, nil, false, nil
+	}
+	rightAs, ok := right.(T)
+	if !ok {
+		return nil, nil, false, fmt.Errorf("cast error: cast left to %s, right is %v",
+			reflect.TypeFor[T]().String(),
+			right)
+	}
+	return &leftAs, &rightAs, true, nil
+}
+
+func EqualSchema(left Schema, right Schema) error {
+	{
+		castLeft, castRight, ok, err := castBoth[Primitive](left, right)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return EqualPrimitive(*castLeft, *castRight)
+		}
+	}
+	{
+		castLeft, castRight, ok, err := castBoth[Object](left, right)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return EqualObject(*castLeft, *castRight)
+		}
+	}
+	{
+		castLeft, castRight, ok, err := castBoth[OneOf](left, right)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return EqualOneOf(*castLeft, *castRight)
+		}
+	}
+	{
+		castLeft, castRight, ok, err := castBoth[Array](left, right)
+		if err != nil {
+			return err
+		}
+		if ok {
+			return EqualArray(*castLeft, *castRight)
+		}
+	}
+	panic(fmt.Errorf("equality for this type is not implemented yet: %s", reflect.TypeOf(left).String()))
+}
+
+func EqualShared(left Shared, right Shared) error {
+	leftJson, err := json.MarshalIndent(left, "", "\t")
+	if err != nil {
+		panic(fmt.Errorf("cannot check left shared: %w", err))
+	}
+	rightJson, err := json.MarshalIndent(right, "", "\t")
+	if err != nil {
+		panic(fmt.Errorf("cannot check right shared: %w", err))
+	}
+	if string(leftJson) != string(rightJson) {
+		return fmt.Errorf("distinct shared: %s != %s", string(leftJson), string(rightJson))
+	}
+	return nil
+}
+
+func EqualArray(left Array, right Array) error {
+	err := EqualShared(left.Shared, right.Shared)
+	if err != nil {
+		return fmt.Errorf("distinct arrays (shared): %w", err)
+	}
+	return EqualSchema(left.Items, right.Items)
+}
+
+func EqualObject(left Object, right Object) error {
+	err := EqualShared(left.Shared, right.Shared)
+	if err != nil {
+		return fmt.Errorf("distinct objects (shared), %v != %v, %w", left, right, err)
+	}
+	// `required`
+	leftRequired := left.Required
+	rightRequired := right.Required
+	slices.Sort(leftRequired)
+	slices.Sort(rightRequired)
+	if len(leftRequired) != len(rightRequired) {
+		return fmt.Errorf("distinct `required`: %v != %v", leftRequired, rightRequired)
+	}
+	for i := range leftRequired {
+		if leftRequired[i] != rightRequired[i] {
+			return fmt.Errorf("distinct `required[%d]`: %v != %v", i, leftRequired, rightRequired)
+		}
+	}
+	// `additionalProperties`
+	if left.AdditionalProperties == nil && right.AdditionalProperties == nil {
+		// We're good.
+	} else if left.AdditionalProperties != nil && right.AdditionalProperties != nil {
+		err := EqualSchema(*left.AdditionalProperties, *right.AdditionalProperties)
+		if err != nil {
+			return err
+		}
+	} else {
+		return errors.New("distinct additional properties")
+	}
+	// `properties`
+	if len(left.Properties) != len(right.Properties) {
+		return fmt.Errorf("distinct `required`: %v != %v", maps.Keys(left.Properties), maps.Keys(right.Properties))
+	}
+	for k := range left.Properties {
+		leftSchema := left.Properties[k]
+		rightSchema := right.Properties[k]
+		err := EqualSchema(leftSchema, rightSchema)
+		if err != nil {
+			return fmt.Errorf("while inspecting key %s, distinct schemas: %w", k, err)
+		}
+	}
+	return nil
+}
+
+func EqualPrimitive(left Primitive, right Primitive) error {
+	leftJson, err := json.MarshalIndent(left, "", "\t")
+	if err != nil {
+		panic(fmt.Errorf("failed to serialize left %v: %w", left, err))
+	}
+	rightJson, err := json.MarshalIndent(right, "", "\t")
+	if err != nil {
+		panic(fmt.Errorf("failed to serialize left %v: %w", right, err))
+	}
+	if string(leftJson) == string(rightJson) {
+		return nil
+	}
+	return fmt.Errorf("%s != %s", string(leftJson), string(rightJson))
+}
+
+func EqualOneOf(left OneOf, right OneOf) error {
+	if len(left.OneOf) != len(right.OneOf) {
+		return fmt.Errorf("invalid number of variants, expected %d, got %d", len(right.OneOf), len(left.OneOf))
+	}
+	leftSchemas := slices.Clone(left.OneOf)
+	rightSchemas := slices.Clone(right.OneOf)
+	for _, fromLeft := range leftSchemas {
+		found := false
+		newRight := []Schema{}
+		for _, fromRight := range rightSchemas {
+			err := EqualSchema(fromLeft, fromRight)
+			if err == nil {
+				found = true
+				// Remove this schema from the list of schemas to test.
+			} else {
+				newRight = append(newRight, fromRight)
+			}
+		}
+		rightSchemas = newRight
+		if !found {
+			return fmt.Errorf("could not find %v among %v.", fromLeft, rightSchemas)
+		}
+	}
+	return nil
 }

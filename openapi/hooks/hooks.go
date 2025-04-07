@@ -28,9 +28,6 @@ type HasSchema = schema.HasSchema
 // Implement this on enums of constants to let gousset list all the possibilities.
 type HasEnum = schema.IsEnum
 
-// Implement this on sum types to let gousset list all the possibilities.
-type IsOneOf = schema.IsOneOf
-
 // Implement this on numbers or strings to restrict to a specific format.
 type HasFormat = schema.HasFormat
 
