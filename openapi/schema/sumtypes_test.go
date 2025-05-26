@@ -7,127 +7,226 @@ import (
 	"testing"
 
 	"github.com/pasqal-io/gousset/openapi/schema"
-	"github.com/pasqal-io/gousset/testutils"
+	"github.com/pasqal-io/gousset/shared"
 )
 
 // -----   Example: Using sum types.
 
-// MyResult represents a sum between types Ok and Err.
-type MyResult interface {
-	// Prevent other types from implementing MySum.
-	sealed()
-	// Make sure that we can generate proper OpenAPI spec
-	// for this type.
-	schema.IsOneOf
+type Unflattened[T any, U any] struct {
+	Comments string `json:"comments"`
+	Ok       *T     `json:"ok" variant:"ok"`
+	Error    *U     `json:"error" variant:"error"`
 }
 
-type Ok struct {
-	Result any `json:"result"`
-}
-
-type Err struct {
-	Error error `json:"error"`
-}
-
-// Implementing sealed, to make sure that only Ok and Err are part of the sum type.
-func (Ok) sealed() {
-}
-func (Err) sealed() {
-}
-
-func (Ok) Type() reflect.Type {
-	return reflect.TypeFor[MyResult]()
-}
-func (Ok) Variants() []reflect.Type {
-	return []reflect.Type{reflect.TypeOf(Ok{}), reflect.TypeOf(Err{})}
-}
-func (Err) Type() reflect.Type {
-	return Ok{}.Type()
-}
-func (Err) Variants() []reflect.Type {
-	return Ok{}.Variants()
-}
-
-var _ MyResult = Ok{}
-
-var _ MyResult = Err{}
-
-// Do NOT forget to call schema.RegisterOneOf!
-var _ = schema.RegisterOneOf(&Ok{})
-
-func ExampleIsOneOf() {
+func ExampleSchema() {
 	spec, err := schema.FromImplementation(schema.Implementation{
-		Type:          reflect.TypeFor[MyResult](),
+		Type:          reflect.TypeFor[Unflattened[int, bool]](),
 		PublicNameKey: "json",
 	})
 	if err != nil {
 		panic(err)
 	}
-	marshaled, err := json.MarshalIndent(spec, "", "\t")
+	marshaled, err := json.Marshal(spec)
 	if err != nil {
 		panic(err)
 	}
 	fmt.Print(string(marshaled))
-	// Output: {
-	// 	"oneOf": [
-	// 		{
-	// 			"type": "object",
-	// 			"required": [
-	// 				"result"
-	// 			],
-	// 			"properties": {
-	// 				"result": {
-	// 					"type": ""
-	// 				}
-	// 			}
-	// 		},
-	// 		{
-	// 			"type": "object",
-	// 			"required": [
-	// 				"error"
-	// 			],
-	// 			"properties": {
-	// 				"error": {
-	// 					"type": ""
-	// 				}
-	// 			}
-	// 		}
-	// 	]
-	// }
+	// Output: {"oneOf":[{"type":"object","required":["comments","ok"],"properties":{"comments":{"type":"string"},"ok":{"type":"number","format":"int32"}}},{"type":"object","required":["comments","error"],"properties":{"comments":{"type":"string"},"error":{"type":"boolean"}}}]}
 }
 
-func TestIsOneOf(t *testing.T) {
+type Flattened[T any, U any] struct {
+	Comments string `json:"comments"`
+	Ok       *T     `flatten:"" variant:"ok"`
+	Error    *U     `flatten:"" variant:"error"`
+}
+
+func TestFlattened(t *testing.T) {
+	type Success struct {
+		Success string `json:"success"`
+	}
+	type Failure struct {
+		Failure bool `json:"failure"`
+	}
 	spec, err := schema.FromImplementation(schema.Implementation{
-		Type:          reflect.TypeFor[MyResult](),
+		Type:          reflect.TypeFor[Flattened[Success, Failure]](),
 		PublicNameKey: "json",
 	})
 	if err != nil {
 		panic(err)
 	}
-	testutils.EqualJSON(t, spec, `{
-		"oneOf": [
-			{
-			"type": "object",
-			"required": [
-				"result"
-			],
-			"properties": {
-				"result": {
-				"type": ""
-				}
-			}
+	// Note: we cannot test with testutils.EqualJSON because the
+	// order of fields in `Required` changes across runs.
+	err = schema.EqualSchema(spec, schema.OneOf{
+		OneOf: []schema.Schema{
+			schema.Object{
+				Shared: schema.Shared{
+					Type: schema.TypeObject,
+				},
+				Required: []string{
+					"comments",
+					"success",
+				},
+				Properties: map[string]schema.Schema{
+					"comments": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeString,
+						},
+					},
+					"success": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeString,
+						},
+					},
+				},
 			},
-			{
-			"type": "object",
-			"required": [
-				"error"
-			],
-			"properties": {
-				"error": {
-				"type": ""
-				}
-			}
-			}
-		]
-		}`)
+			schema.Object{
+				Shared: schema.Shared{
+					Type: schema.TypeObject,
+				},
+				Required: []string{
+					"comments",
+					"failure",
+				},
+				Properties: map[string]schema.Schema{
+					"comments": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeString,
+						},
+					},
+					"failure": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeBool,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMoreFlattened(t *testing.T) {
+	type Success struct {
+		Success string `json:"result"`
+	}
+	type Failure struct {
+		Failure bool `json:"result"`
+	}
+	spec, err := schema.FromImplementation(schema.Implementation{
+		Type:          reflect.TypeFor[Flattened[Success, Failure]](),
+		PublicNameKey: "json",
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	// Note: we cannot test with testutils.EqualJSON because the
+	// order of fields in `Required` changes across runs.
+	err = schema.EqualSchema(spec, schema.OneOf{
+		OneOf: []schema.Schema{
+			schema.Object{
+				Shared: schema.Shared{
+					Type: schema.TypeObject,
+				},
+				Required: []string{
+					"comments",
+					"result",
+				},
+				Properties: map[string]schema.Schema{
+					"comments": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeString,
+						},
+					},
+					"result": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeString,
+						},
+					},
+				},
+			},
+			schema.Object{
+				Shared: schema.Shared{
+					Type: schema.TypeObject,
+				},
+				Required: []string{
+					"comments",
+					"result",
+				},
+				Properties: map[string]schema.Schema{
+					"comments": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeString,
+						},
+					},
+					"result": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeBool,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFullyFlattened(t *testing.T) {
+	type Int struct {
+		Field int `json:"field"`
+	}
+	type String struct {
+		Field string `json:"field"`
+	}
+	type Sum struct {
+		*Int    `variant:"int" flatten:""`
+		*String `variant:"string" flatten:""`
+	}
+	spec, err := schema.FromImplementation(schema.Implementation{
+		Type:          reflect.TypeFor[Sum](),
+		PublicNameKey: "json",
+	})
+	if err != nil {
+		panic(err)
+	}
+	// Note: we cannot test with testutils.EqualJSON because the
+	// order of fields in `Required` changes across runs.
+	err = schema.EqualSchema(spec, schema.OneOf{
+		OneOf: []schema.Schema{
+			schema.Object{
+				Shared: schema.Shared{
+					Type: schema.TypeObject,
+				},
+				Required: []string{"field"},
+				Properties: map[string]schema.Schema{
+					"field": schema.Primitive{
+						Shared: schema.Shared{
+							Type:   schema.TypeNumber,
+							Format: shared.Ptr(string(schema.FormatInt32)),
+						},
+					},
+				},
+			},
+			schema.Object{
+				Shared: schema.Shared{
+					Type: schema.TypeObject,
+				},
+				Required: []string{"field"},
+				Properties: map[string]schema.Schema{
+					"field": schema.Primitive{
+						Shared: schema.Shared{
+							Type: schema.TypeString,
+						},
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 }
