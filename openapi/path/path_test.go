@@ -66,6 +66,9 @@ func TestFromPath(t *testing.T) {
 	perVerb[path.Post] = path.VerbImplementation{
 		Input: reflect.TypeOf(BodyPathQuery{}),
 	}
+	perVerb[path.Patch] = path.VerbImplementation{
+		Input: reflect.TypeOf(BodyPathQuery{}),
+	}
 	result, err := path.FromPath(path.Implementation{
 		Summary: "Clearly, this is a path",
 		Path:    "/foo/bar",
@@ -115,6 +118,81 @@ func TestFromPath(t *testing.T) {
 		"post": {
 			"summary": "",
 			"operationId": "post /foo/bar",
+			"parameters": [
+			{
+				"description": "expecting a few strings",
+				"in": "path",
+				"name": "some_strings",
+				"required": true,
+				"schema": {
+				"items": {
+					"type": "string"
+				},
+				"type": "array"
+				}
+			},
+			{
+				"description": "expecting a few integers",
+				"in": "query",
+				"name": "query_numbers",
+				"required": true,
+				"schema": {
+				"items": {
+					"type": "number",
+					"format": "int32"
+				},
+				"type": "array"
+				}
+			}
+			],
+			"requestBody": {
+			"required": true,
+			"content": {
+				"application/json": {
+				"schema": {
+					"type": "object",
+					"required": [
+					"some_numbers",
+					"an_object"
+					],
+					"properties": {
+					"an_object": {
+						"type": "object",
+						"required": [
+						"an_int",
+						"a_string"
+						],
+						"properties": {
+						"a_string": {
+							"type": "string"
+						},
+						"an_int": {
+							"type": "number",
+							"format": "int32"
+						}
+						}
+					},
+					"some_numbers": {
+						"type": "array",
+						"items": {
+						"type": "number",
+						"format": "int32"
+						}
+					}
+					}
+				}
+				}
+			}
+			},
+			"responses": {
+			"default": {
+				"description": ""
+			}
+			}
+		},
+		"patch": {
+			"summary": "",
+			"operationId": "patch /foo/bar",
 			"parameters": [
 			{
 				"description": "expecting a few strings",

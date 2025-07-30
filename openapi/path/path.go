@@ -59,11 +59,14 @@ type Spec struct {
 	// In the current implementation, we expect that this contains the path parameters.
 	Parameters *[]parameter.Parameter `json:"parameters,omitempty"`
 
+	// The verbs
+
 	Get     *operation.Spec `json:"get,omitempty"`
 	Put     *operation.Spec `json:"put,omitempty"`
 	Post    *operation.Spec `json:"post,omitempty"`
 	Delete  *operation.Spec `json:"delete,omitempty"`
 	Options *operation.Spec `json:"options,omitempty"`
+	Patch   *operation.Spec `json:"patch,omitempty"`
 }
 
 // User-provided metadata containing information on the implementation
@@ -137,6 +140,8 @@ func FromPath(impl Implementation) (Spec, error) {
 			ptr = &result.Delete
 		case Options:
 			ptr = &result.Options
+		case Patch:
+			ptr = &result.Patch
 		default:
 			panic(fmt.Sprint("Verb not handled ", verb))
 		}
